@@ -1,0 +1,29 @@
+{
+  "name": "puma-brain",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F @puma-brain/backend dev",
+    "dev:setup": "turbo -F @puma-brain/backend dev:setup"
+  },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "zod": "catalog:",
+    "@puma-brain/env": "workspace:*"
+  },
+  "devDependencies": {
+    "turbo": "^2.6.3",
+    "typescript": "catalog:",
+    "@puma-brain/config": "workspace:*"
+  },
+  "packageManager": "pnpm@10.26.1"
+}

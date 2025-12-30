@@ -1,0 +1,3 @@
+{
+  "extends": "@puma-brain/config/tsconfig.base.json"
+}
