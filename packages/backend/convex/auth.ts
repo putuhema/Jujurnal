@@ -21,6 +21,12 @@ function createAuth(ctx: GenericCtx<DataModel>) {
       enabled: true,
       requireEmailVerification: false,
     },
+    socialProviders: {
+      github: {
+        clientId: process.env.BETTER_AUTH_GITHUB_CLIENT_ID!,
+        clientSecret: process.env.BETTER_AUTH_GITHUB_CLIENT_SECRET!,
+      },
+    },
     plugins: [
       convex({
         authConfig,

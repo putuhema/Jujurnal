@@ -1,7 +1,7 @@
 import { convexBetterAuthNextJs } from "@convex-dev/better-auth/nextjs";
 import { env } from "@puma-brain/env/web";
 
-import { isAuthError } from "@/lib/utils";
+// import { isAuthError } from "@/lib/utils";
 
 export const {
   handler,

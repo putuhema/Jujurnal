@@ -1,32 +1,24 @@
 "use client";
 import Link from "next/link";
 
-import { ModeToggle } from "./mode-toggle";
+import { QuotesIcon } from "@phosphor-icons/react";
+import { buttonVariants } from "./ui/button";
+import { LogginUser } from "./loggin-user";
 
 export default function Header() {
-  const links = [
-    { to: "/", label: "Home" },
-    { to: "/dashboard", label: "Dashboard" },
-    { to: "/todos", label: "Todos" },
-  ] as const;
-
   return (
     <div>
       <div className="flex flex-row items-center justify-between px-2 py-1">
         <nav className="flex gap-4 text-lg">
-          {links.map(({ to, label }) => {
-            return (
-              <Link key={to} href={to}>
-                {label}
-              </Link>
-            );
-          })}
+          <Link
+            href="/home"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            <QuotesIcon /> pumathought
+          </Link>
         </nav>
-        <div className="flex items-center gap-2">
-          <ModeToggle />
-        </div>
+        <LogginUser />
       </div>
-      <hr />
     </div>
   );
 }
