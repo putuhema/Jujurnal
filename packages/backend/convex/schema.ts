@@ -6,4 +6,8 @@ export default defineSchema({
     text: v.string(),
     completed: v.boolean(),
   }),
+  posts: defineTable({
+    body: v.string(),
+    userId: v.string(),
+  }).index("by_authorId", ["userId"]),
 });

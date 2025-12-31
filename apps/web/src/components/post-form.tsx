@@ -5,11 +5,12 @@ import z from "zod";
 import { Field, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 
 export const PostForm = () => {
   const user = useQuery(api.auth.getCurrentUser);
+  const createPost = useMutation(api.post.create);
   const form = useForm({
     defaultValues: {
       post: "",
@@ -20,7 +21,10 @@ export const PostForm = () => {
       }),
     },
     onSubmit: ({ value }) => {
-      console.log(value.post);
+      createPost({
+        text: value.post,
+      });
+      form.reset();
     },
   });
 
