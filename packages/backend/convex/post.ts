@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 
-import { query, mutation, action, internalMutation } from "./_generated/server";
+import {
+  query,
+  mutation,
+  action,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { authComponent } from "./auth";
 import { google } from "@ai-sdk/google";
@@ -225,6 +231,23 @@ const numberToGrade = (num: number): MoodGrade => {
   if (num >= 1.5) return "D-";
   return "F";
 };
+
+export const getUserPostsInternal = internalQuery({
+  args: {
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
+      .collect();
+    return posts.map((post) => ({
+      body: post.body,
+      mood: post.mood,
+      _creationTime: post._creationTime,
+    }));
+  },
+});
 
 export const createInternal = internalMutation({
   args: {

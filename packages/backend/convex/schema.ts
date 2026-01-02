@@ -38,4 +38,29 @@ export default defineSchema({
     isEdited: v.optional(v.boolean()),
     editedAt: v.optional(v.number()),
   }).index("by_authorId", ["userId"]),
+  summaries: defineTable({
+    userId: v.string(),
+    periodType: v.union(v.literal("weekly"), v.literal("monthly")),
+    startDate: v.number(),
+    endDate: v.number(),
+    summary: v.string(),
+    postCount: v.number(),
+    averageMood: v.union(
+      v.literal("A+"),
+      v.literal("A"),
+      v.literal("A-"),
+      v.literal("B+"),
+      v.literal("B"),
+      v.literal("B-"),
+      v.literal("C+"),
+      v.literal("C"),
+      v.literal("C-"),
+      v.literal("D+"),
+      v.literal("D"),
+      v.literal("D-"),
+      v.literal("F")
+    ),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_period", ["userId", "periodType", "startDate"]),
 });
