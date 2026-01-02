@@ -9,15 +9,18 @@
     "dev:setup": "convex dev --configure --until-success"
   },
   "dependencies": {
-    "convex": "catalog:",
-    "better-auth": "catalog:",
+    "@ai-sdk/google": "^3.0.2",
     "@convex-dev/better-auth": "catalog:",
+    "@google/genai": "^1.34.0",
+    "ai": "^6.0.5",
+    "better-auth": "catalog:",
+    "convex": "catalog:",
     "dotenv": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@puma-brain/config": "workspace:*",
     "@types/node": "^24.3.0",
-    "typescript": "catalog:",
-    "@puma-brain/config": "workspace:*"
+    "typescript": "catalog:"
   }
 }

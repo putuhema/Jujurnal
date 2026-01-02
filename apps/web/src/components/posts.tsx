@@ -36,6 +36,11 @@ export const Posts = () => {
                 <ItemDescription className="text-xs">
                   {format(new Date(post._creationTime), "dd/MM/yyy HH:mm aaa")}
                 </ItemDescription>
+                {post.mood && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted">
+                    Mood: {post.mood}
+                  </span>
+                )}
               </div>
               <p>{post.body}</p>
             </ItemContent>
