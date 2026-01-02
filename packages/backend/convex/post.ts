@@ -169,6 +169,63 @@ Respond with ONLY the grade letter (e.g., "A+", "B-", "F") and nothing else.`,
   return "C";
 };
 
+// Convert mood grade to a fun, engaging word
+const getMoodWord = (grade: MoodGrade): string => {
+  const moodWords: Record<MoodGrade, string> = {
+    "A+": "Radiant ✨",
+    A: "Sunny 🌞",
+    "A-": "Content 😊",
+    "B+": "Upbeat 🎵",
+    B: "Steady ⚖️",
+    "B-": "Chill 😌",
+    "C+": "Reflective 🤔",
+    C: "Balanced ⚖️",
+    "C-": "Subdued 🌫️",
+    "D+": "Cloudy ☁️",
+    D: "Heavy 💭",
+    "D-": "Stormy ⛈️",
+    F: "Grim 🌑",
+  };
+  return moodWords[grade] || "Unknown";
+};
+
+// Convert numeric grade to MoodGrade
+const gradeToNumber = (grade: MoodGrade): number => {
+  const gradeMap: Record<MoodGrade, number> = {
+    "A+": 13,
+    A: 12,
+    "A-": 11,
+    "B+": 10,
+    B: 9,
+    "B-": 8,
+    "C+": 7,
+    C: 6,
+    "C-": 5,
+    "D+": 4,
+    D: 3,
+    "D-": 2,
+    F: 1,
+  };
+  return gradeMap[grade];
+};
+
+// Convert number back to MoodGrade
+const numberToGrade = (num: number): MoodGrade => {
+  if (num >= 12.5) return "A+";
+  if (num >= 11.5) return "A";
+  if (num >= 10.5) return "A-";
+  if (num >= 9.5) return "B+";
+  if (num >= 8.5) return "B";
+  if (num >= 7.5) return "B-";
+  if (num >= 6.5) return "C+";
+  if (num >= 5.5) return "C";
+  if (num >= 4.5) return "C-";
+  if (num >= 3.5) return "D+";
+  if (num >= 2.5) return "D";
+  if (num >= 1.5) return "D-";
+  return "F";
+};
+
 export const createInternal = internalMutation({
   args: {
     text: v.string(),
@@ -221,7 +278,6 @@ export const create = action({
       throw new Error("Not authenticated");
     }
 
-    // Analyze mood and grammar in parallel for better performance
     const [mood, grammarSuggestions] = await Promise.all([
       analyzeMood(args.text),
       analyzeGrammar(args.text),
@@ -283,5 +339,57 @@ export const deletePost = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete("posts", args.id);
     return { success: true };
+  },
+});
+
+export const getMonthlyMood = query({
+  handler: async (ctx) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
+    if (!currentUser) {
+      return null;
+    }
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+
+    const startTimestamp = startOfMonth.getTime();
+    const endTimestamp = endOfMonth.getTime();
+
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
+      .collect();
+
+    const monthlyPosts = posts.filter((post) => {
+      const postTime = post._creationTime;
+      return postTime >= startTimestamp && postTime <= endTimestamp;
+    });
+
+    if (monthlyPosts.length === 0) {
+      return null;
+    }
+
+    const moodSum = monthlyPosts.reduce((sum, post) => {
+      return sum + gradeToNumber(post.mood);
+    }, 0);
+
+    const averageMood = moodSum / monthlyPosts.length;
+    const overallGrade = numberToGrade(averageMood);
+    const moodWord = getMoodWord(overallGrade);
+
+    return {
+      mood: overallGrade,
+      moodWord: moodWord,
+      postCount: monthlyPosts.length,
+    };
   },
 });
