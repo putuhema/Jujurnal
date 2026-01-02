@@ -24,5 +24,18 @@ export default defineSchema({
       v.literal("D-"),
       v.literal("F")
     ),
+    grammarSuggestions: v.optional(
+      v.array(
+        v.object({
+          original: v.string(),
+          corrected: v.string(),
+          explanation: v.string(),
+          issueType: v.string(),
+        })
+      )
+    ),
+    originalBody: v.optional(v.string()),
+    isEdited: v.optional(v.boolean()),
+    editedAt: v.optional(v.number()),
   }).index("by_authorId", ["userId"]),
 });
