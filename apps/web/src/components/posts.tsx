@@ -6,20 +6,15 @@ import { useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import {
   Item,
-  ItemActions,
   ItemContent,
   ItemDescription,
+  ItemFooter,
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { DotsThreeIcon, TrashSimpleIcon } from "@phosphor-icons/react";
+import { SparkleIcon, TrashSimpleIcon } from "@phosphor-icons/react";
+import { Button } from "./ui/button";
 
 export const Posts = () => {
   const posts = useQuery(api.post.getAll);
@@ -44,25 +39,24 @@ export const Posts = () => {
               </div>
               <p>{post.body}</p>
             </ItemContent>
-            <ItemActions>
-              <DropdownMenu>
-                <DropdownMenuTrigger>
-                  <DotsThreeIcon />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => {
-                      deletePost({
-                        id: post._id,
-                      });
-                    }}
-                  >
-                    <TrashSimpleIcon /> Remove
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </ItemActions>
+            <ItemFooter>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon-sm">
+                  <SparkleIcon />
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    deletePost({
+                      id: post._id,
+                    });
+                  }}
+                >
+                  <TrashSimpleIcon /> Delete Post
+                </Button>
+              </div>
+            </ItemFooter>
           </Item>
         ))}
     </div>

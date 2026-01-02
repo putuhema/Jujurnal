@@ -14,7 +14,7 @@ export default function Header() {
             href="/home"
             className={buttonVariants({ variant: "ghost", size: "sm" })}
           >
-            <QuotesIcon /> pumathought
+            <QuotesIcon /> jujurnal
           </Link>
         </nav>
         <LogginUser />

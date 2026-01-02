@@ -36,7 +36,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers initialToken={token}>
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-2xl mx-auto p-6">
             <Header />
             {children}
           </div>
