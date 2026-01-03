@@ -11,10 +11,12 @@ import {
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { SocialLogin } from "./social-login";
 import { SignOutIcon, UserIcon } from "@phosphor-icons/react";
+import { useRouter } from "next/navigation";
+import type { Route } from "next";
 
 export const LogginUser = () => {
   const { data } = authClient.useSession();
-
+  const router = useRouter();
   return (
     <>
       <Authenticated>
@@ -26,7 +28,9 @@ export const LogginUser = () => {
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => router.push("/profile" as Route<"/profile">)}
+            >
               <UserIcon />
               Profile
             </DropdownMenuItem>

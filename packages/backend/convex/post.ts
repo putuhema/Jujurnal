@@ -18,7 +18,18 @@ export const getAll = query({
     return Promise.all(
       (posts ?? []).map(async (post) => {
         const user = await authComponent.getAnyUserById(ctx, post.userId);
-        return { ...post, user };
+        const tags = post.tagIds
+          ? await Promise.all(
+              post.tagIds.map(async (tagId) => {
+                const tag = await ctx.db.get(tagId);
+                return tag ? { _id: tag._id, name: tag.name } : null;
+              })
+            )
+          : [];
+
+        const validTags = tags.filter((tag) => tag !== null);
+
+        return { ...post, user, tags: validTags };
       })
     );
   },
@@ -124,11 +135,14 @@ const applyCorrectionsToText = (
   return correctedText;
 };
 
-const analyzeMood = async (text: string): Promise<MoodGrade> => {
+const analyzeMood = async (
+  text: string
+): Promise<{ grade: MoodGrade; reason: string }> => {
   const model = google("gemini-2.5-flash");
 
   const { text: moodText } = await generateText({
     model,
+    system: `You are an English grammar teacher helping a student improve their writing. Analyze the following text for grammar, spelling, punctuation, and style errors.`,
     prompt: `Analyze the mood or tone of the following text and assign it a grade from A+ (very positive) to F (very negative). 
 
 The grading scale is:
@@ -168,14 +182,62 @@ Respond with ONLY the grade letter (e.g., "A+", "B-", "F") and nothing else.`,
     "F",
   ];
 
-  if (validGrades.includes(grade)) {
-    return grade;
-  }
+  const finalGrade = validGrades.includes(grade) ? grade : "C";
 
-  return "C";
+  const { text: reasonText } = await generateText({
+    model,
+    prompt: `You just assigned the mood grade "${finalGrade}" to this text: "${text}"
+
+Provide a brief, one-sentence explanation for why this grade was assigned. Keep it concise and helpful (maximum 20 words).
+
+Example: "The text expresses deep frustration and disappointment."
+Example: "The text shows genuine joy and enthusiasm."
+
+Respond with ONLY the explanation sentence, nothing else.`,
+  });
+
+  const reason = reasonText.trim() || "Neutral mood detected.";
+
+  return { grade: finalGrade, reason };
 };
 
-// Convert mood grade to a fun, engaging word
+const analyzeCategories = async (text: string): Promise<string[]> => {
+  const model = google("gemini-2.5-flash");
+
+  const { text: categoryText } = await generateText({
+    model,
+    prompt: `Analyze the following text and identify 1-3 relevant category tags that best describe its topic or theme.
+
+Text: "${text}"
+
+Return ONLY a JSON array of category names (1-3 items). Use concise, single-word or short phrase tags (e.g., "work", "relationships", "health", "learning", "reflection", "gratitude", "stress", "goals").
+
+Examples:
+- ["work", "stress"]
+- ["relationships", "gratitude"]
+- ["health", "reflection"]
+- ["learning", "goals"]
+
+Respond with ONLY the JSON array, nothing else.`,
+  });
+
+  try {
+    const jsonMatch = categoryText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const categories = JSON.parse(jsonMatch[0]) as string[];
+      // Validate and clean the categories
+      return categories
+        .filter((cat) => typeof cat === "string" && cat.trim().length > 0)
+        .map((cat) => cat.trim().toLowerCase())
+        .slice(0, 3); // Limit to 3 categories
+    }
+  } catch (error) {
+    console.error("Error parsing categories:", error);
+  }
+
+  return [];
+};
+
 const getMoodWord = (grade: MoodGrade): string => {
   const moodWords: Record<MoodGrade, string> = {
     "A+": "Radiant ✨",
@@ -265,6 +327,38 @@ export const getUserPostsInternal = internalQuery({
   },
 });
 
+// Get or create tags by name (returns tag IDs)
+export const getOrCreateTags = internalMutation({
+  args: {
+    tagNames: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const tagIds: any[] = [];
+
+    for (const tagName of args.tagNames) {
+      const normalizedName = tagName.trim().toLowerCase();
+
+      // Check if tag already exists
+      const existingTag = await ctx.db
+        .query("tags")
+        .withIndex("by_name", (q) => q.eq("name", normalizedName))
+        .first();
+
+      if (existingTag) {
+        tagIds.push(existingTag._id);
+      } else {
+        // Create new tag
+        const newTagId = await ctx.db.insert("tags", {
+          name: normalizedName,
+        });
+        tagIds.push(newTagId);
+      }
+    }
+
+    return tagIds;
+  },
+});
+
 export const createInternal = internalMutation({
   args: {
     text: v.string(),
@@ -284,6 +378,8 @@ export const createInternal = internalMutation({
       v.literal("D-"),
       v.literal("F")
     ),
+    moodReason: v.optional(v.string()),
+    tagIds: v.optional(v.array(v.id("tags"))),
     grammarSuggestions: v.optional(
       v.array(
         v.object({
@@ -300,6 +396,8 @@ export const createInternal = internalMutation({
       body: args.text,
       userId: args.userId,
       mood: args.mood,
+      moodReason: args.moodReason,
+      tagIds: args.tagIds && args.tagIds.length > 0 ? args.tagIds : undefined,
       grammarSuggestions: args.grammarSuggestions,
     });
 
@@ -389,15 +487,26 @@ export const create = action({
       throw new Error("Not authenticated");
     }
 
-    const [mood, grammarSuggestions] = await Promise.all([
+    const [moodAnalysis, grammarSuggestions, categories] = await Promise.all([
       analyzeMood(args.text),
       analyzeGrammar(args.text),
+      analyzeCategories(args.text),
     ]);
+
+    // Get or create tags
+    let tagIds: any[] | undefined = undefined;
+    if (categories.length > 0) {
+      tagIds = await ctx.runMutation(internal.post.getOrCreateTags, {
+        tagNames: categories,
+      });
+    }
 
     await ctx.runMutation(internal.post.createInternal, {
       text: args.text,
       userId: currentUser._id,
-      mood,
+      mood: moodAnalysis.grade,
+      moodReason: moodAnalysis.reason,
+      tagIds: tagIds,
       grammarSuggestions:
         grammarSuggestions.length > 0 ? grammarSuggestions : undefined,
     });
@@ -437,6 +546,7 @@ export const applyGrammarCorrections = mutation({
       originalBody: originalBody,
       isEdited: true,
       editedAt: Date.now(),
+      grammarSuggestions: undefined,
     });
 
     return { success: true, correctedText };
@@ -502,6 +612,53 @@ export const getMonthlyMood = query({
       moodWord: moodWord,
       postCount: monthlyPosts.length,
     };
+  },
+});
+
+export const getYearMoodData = query({
+  args: {
+    year: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
+    if (!currentUser) {
+      return null;
+    }
+
+    // Get all posts for the current user
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
+      .collect();
+
+    // Filter posts for the specified year
+    const yearStart = new Date(`${args.year}-01-01T00:00:00Z`).getTime();
+    const yearEnd = new Date(`${args.year}-12-31T23:59:59Z`).getTime();
+
+    const yearPosts = posts.filter((post) => {
+      return post._creationTime >= yearStart && post._creationTime <= yearEnd;
+    });
+
+    // Group posts by date (YYYY-MM-DD) - take the latest post of the day
+    const postsByDate = new Map<
+      string,
+      { mood: MoodGrade; _creationTime: number }
+    >();
+    for (const post of yearPosts) {
+      const dateStr = getDateString(post._creationTime);
+      const existing = postsByDate.get(dateStr);
+      if (!existing || post._creationTime > existing._creationTime) {
+        postsByDate.set(dateStr, {
+          mood: post.mood,
+          _creationTime: post._creationTime,
+        });
+      }
+    }
+
+    return Array.from(postsByDate.entries()).map(([date, data]) => ({
+      date,
+      mood: data.mood,
+    }));
   },
 });
 

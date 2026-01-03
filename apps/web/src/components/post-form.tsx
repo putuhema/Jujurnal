@@ -17,7 +17,6 @@ export const PostForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
 
-  // Cycle through engaging loading messages
   useEffect(() => {
     if (!isLoading) return;
 

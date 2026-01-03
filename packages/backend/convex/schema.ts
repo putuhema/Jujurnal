@@ -24,6 +24,7 @@ export default defineSchema({
       v.literal("D-"),
       v.literal("F")
     ),
+    moodReason: v.optional(v.string()),
     grammarSuggestions: v.optional(
       v.array(
         v.object({
@@ -37,6 +38,7 @@ export default defineSchema({
     originalBody: v.optional(v.string()),
     isEdited: v.optional(v.boolean()),
     editedAt: v.optional(v.number()),
+    tagIds: v.optional(v.array(v.id("tags"))),
   }).index("by_authorId", ["userId"]),
   summaries: defineTable({
     userId: v.string(),
@@ -70,4 +72,7 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_badgeId", ["userId", "badgeId"]),
+  tags: defineTable({
+    name: v.string(),
+  }).index("by_name", ["name"]),
 });

@@ -7,19 +7,19 @@ import { useState } from "react";
 import { format } from "date-fns";
 import {
   Item,
+  ItemActions,
   ItemContent,
   ItemDescription,
-  ItemFooter,
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  SparkleIcon,
   TrashSimpleIcon,
   BookOpenIcon,
   CheckCircleIcon,
   ArrowCounterClockwiseIcon,
+  DotsThreeCircleIcon,
 } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 import {
@@ -28,6 +28,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "./ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
@@ -91,6 +97,24 @@ export const Posts = () => {
                       </Badge>
                     )}
                   </div>
+                  {post.moodReason && (
+                    <div className="text-xs text-muted-foreground mt-1 mb-2">
+                      {post.moodReason}
+                    </div>
+                  )}
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2 mb-2">
+                      {post.tags.map((tag: any) => (
+                        <Badge
+                          key={tag._id}
+                          variant="outline"
+                          className="text-xs font-normal"
+                        >
+                          {tag.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <p
                       className={
@@ -190,19 +214,20 @@ export const Posts = () => {
                       </div>
                     )}
                 </ItemContent>
-                <ItemFooter>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      deletePost({
-                        id: post._id,
-                      });
-                    }}
-                  >
-                    <TrashSimpleIcon /> Delete Post
-                  </Button>
-                </ItemFooter>
+                <ItemActions>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger>
+                      <DotsThreeCircleIcon />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => deletePost({ id: post._id })}
+                      >
+                        <TrashSimpleIcon /> Delete Post
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </ItemActions>
               </Item>
             );
           };

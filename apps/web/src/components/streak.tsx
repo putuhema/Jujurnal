@@ -1,16 +1,10 @@
 "use client";
 
-import {
-  FireIcon,
-  MedalIcon,
-  TargetIcon,
-  HeartIcon,
-} from "@phosphor-icons/react";
+import { FireIcon, MedalIcon, TargetIcon } from "@phosphor-icons/react";
 import { useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 
 export const Streak = () => {
-  const monthlyMood = useQuery(api.post.getMonthlyMood);
   const streakStats = useQuery(api.post.getStreakStats);
 
   const currentStreak = streakStats?.currentStreak ?? 0;
@@ -44,15 +38,6 @@ export const Streak = () => {
           <p className="text-xl">{totalPosts}/365</p>
         </div>
       </div>
-      {monthlyMood && (
-        <div className="flex items-center gap-2">
-          <HeartIcon size={32} />
-          <div>
-            <p className="text-xs text-muted-foreground">THIS MONTH'S MOOD</p>
-            <p className="text-xl font-semibold">{monthlyMood.moodWord}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

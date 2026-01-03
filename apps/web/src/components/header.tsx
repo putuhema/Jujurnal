@@ -11,7 +11,7 @@ export default function Header() {
       <div className="flex flex-row items-center justify-between px-2 py-1">
         <nav className="flex gap-4 text-lg">
           <Link
-            href="/home"
+            href="/"
             className={buttonVariants({ variant: "ghost", size: "sm" })}
           >
             <QuotesIcon /> jujurnal

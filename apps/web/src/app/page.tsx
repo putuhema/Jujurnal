@@ -1,7 +1,13 @@
+import { PostForm } from "@/components/post-form";
+import { Posts } from "@/components/posts";
+import { Streak } from "@/components/streak";
+
 export default function Page() {
   return (
-    <div>
-      <h1>Home :)</h1>
+    <div className="space-y-6">
+      <Streak />
+      <PostForm />
+      <Posts />
     </div>
   );
 }
