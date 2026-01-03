@@ -232,6 +232,22 @@ const numberToGrade = (num: number): MoodGrade => {
   return "F";
 };
 
+// Helper function to get date string (YYYY-MM-DD) from timestamp
+const getDateString = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// Helper function to get date string for a specific day offset
+const getDateStringForDay = (daysAgo: number): string => {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return getDateString(date.getTime());
+};
+
 export const getUserPostsInternal = internalQuery({
   args: {
     userId: v.string(),
@@ -285,6 +301,78 @@ export const createInternal = internalMutation({
       userId: args.userId,
       mood: args.mood,
       grammarSuggestions: args.grammarSuggestions,
+    });
+
+    // Check for badges after creating post
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const postCount = posts.length;
+
+    // Check post count badges
+    await ctx.runMutation(internal.achievements.checkPostCountBadges, {
+      userId: args.userId,
+      postCount,
+    });
+
+    // Check perfect grammar badge
+    await ctx.runMutation(internal.achievements.checkPerfectGrammarBadge, {
+      userId: args.userId,
+      hasGrammarSuggestions: !!(
+        args.grammarSuggestions && args.grammarSuggestions.length > 0
+      ),
+    });
+
+    // Check streak badges
+    const postsByDate = new Set<string>();
+    for (const post of posts) {
+      const dateStr = getDateString(post._creationTime);
+      postsByDate.add(dateStr);
+    }
+
+    // Calculate current streak
+    let currentStreak = 0;
+    const today = getDateString(Date.now());
+    if (postsByDate.has(today)) {
+      currentStreak = 1;
+      let daysAgo = 1;
+      while (true) {
+        const dateStr = getDateStringForDay(daysAgo);
+        if (postsByDate.has(dateStr)) {
+          currentStreak++;
+          daysAgo++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Calculate longest streak
+    let longestStreak = 1;
+    if (postsByDate.size > 0) {
+      const sortedDates = Array.from(postsByDate).sort();
+      let currentLongestStreak = 1;
+      for (let i = 1; i < sortedDates.length; i++) {
+        const prevDate = new Date(sortedDates[i - 1] + "T00:00:00Z");
+        const currDate = new Date(sortedDates[i] + "T00:00:00Z");
+        const daysDiff = Math.floor(
+          (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24)
+        );
+        if (daysDiff === 1) {
+          currentLongestStreak++;
+          longestStreak = Math.max(longestStreak, currentLongestStreak);
+        } else {
+          currentLongestStreak = 1;
+        }
+      }
+    }
+
+    await ctx.runMutation(internal.achievements.checkStreakBadges, {
+      userId: args.userId,
+      currentStreak,
+      longestStreak,
     });
   },
 });
@@ -416,22 +504,6 @@ export const getMonthlyMood = query({
     };
   },
 });
-
-// Helper function to get date string (YYYY-MM-DD) from timestamp
-const getDateString = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-// Helper function to get date string for a specific day offset
-const getDateStringForDay = (daysAgo: number): string => {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - daysAgo);
-  return getDateString(date.getTime());
-};
 
 export const getStreakStats = query({
   handler: async (ctx) => {

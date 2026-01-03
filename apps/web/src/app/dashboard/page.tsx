@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import UserMenu from "@/components/user-menu";
+import { Achievements } from "@/components/achievements";
 
 export default function DashboardPage() {
   const [showSignIn, setShowSignIn] = useState(false);
@@ -18,10 +19,13 @@ export default function DashboardPage() {
   return (
     <>
       <Authenticated>
-        <div>
-          <h1>Dashboard</h1>
-          <p>privateData: {privateData?.message}</p>
-          <UserMenu />
+        <div className="space-y-6">
+          <div>
+            <h1>Dashboard</h1>
+            <p>privateData: {privateData?.message}</p>
+            <UserMenu />
+          </div>
+          <Achievements />
         </div>
       </Authenticated>
       {/* <Unauthenticated>

@@ -266,6 +266,12 @@ export const generateWeeklySummary = action({
       averageMood,
     });
 
+    // Check for summary badge
+    await ctx.runMutation(internal.achievements.checkSummaryBadges, {
+      userId: currentUser._id,
+      periodType: "weekly",
+    });
+
     return {
       success: true,
       summary,
@@ -352,6 +358,12 @@ export const generateMonthlySummary = action({
       summary,
       postCount: monthPosts.length,
       averageMood,
+    });
+
+    // Check for summary badge
+    await ctx.runMutation(internal.achievements.checkSummaryBadges, {
+      userId: currentUser._id,
+      periodType: "monthly",
     });
 
     return {

@@ -63,4 +63,11 @@ export default defineSchema({
   })
     .index("by_userId", ["userId"])
     .index("by_userId_period", ["userId", "periodType", "startDate"]),
+  achievements: defineTable({
+    userId: v.string(),
+    badgeId: v.string(),
+    unlockedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_badgeId", ["userId", "badgeId"]),
 });
