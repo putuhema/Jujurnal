@@ -240,6 +240,10 @@ export const generateWeeklySummary = action({
       throw new Error("No posts found for this week");
     }
 
+    if (weekPosts.length < 7) {
+      throw new Error("Weekly summary requires at least 7 posts");
+    }
+
     // Calculate average mood
     const moodSum = weekPosts.reduce(
       (
@@ -332,6 +336,10 @@ export const generateMonthlySummary = action({
 
     if (monthPosts.length === 0) {
       throw new Error("No posts found for this month");
+    }
+
+    if (monthPosts.length < 30) {
+      throw new Error("Monthly summary requires at least 30 posts");
     }
 
     // Calculate average mood
