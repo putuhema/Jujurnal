@@ -92,7 +92,6 @@ Be thorough but focus on actual errors and meaningful improvements. Don't sugges
   }
 
   try {
-    // Try to parse JSON from the response
     const jsonMatch = grammarAnalysis.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       const suggestions = JSON.parse(jsonMatch[0]) as GrammarSuggestion[];
@@ -113,16 +112,13 @@ const applyCorrectionsToText = (
 ): string => {
   let correctedText = text;
 
-  // Apply corrections in reverse order to maintain correct indices
-  // Sort by position in text (from end to start) to avoid index shifting issues
   const sortedSuggestions = [...suggestions].sort((a, b) => {
     const indexA = correctedText.lastIndexOf(a.original);
     const indexB = correctedText.lastIndexOf(b.original);
-    return indexB - indexA; // Sort descending
+    return indexB - indexA;
   });
 
   for (const suggestion of sortedSuggestions) {
-    // Replace all occurrences of the original text with corrected text
     correctedText = correctedText.replace(
       new RegExp(
         suggestion.original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
@@ -135,14 +131,11 @@ const applyCorrectionsToText = (
   return correctedText;
 };
 
-const analyzeMood = async (
-  text: string
-): Promise<{ grade: MoodGrade; reason: string }> => {
+const analyzeMood = async (text: string): Promise<{ grade: MoodGrade }> => {
   const model = google("gemini-2.5-flash");
 
   const { text: moodText } = await generateText({
     model,
-    system: `You are an English grammar teacher helping a student improve their writing. Analyze the following text for grammar, spelling, punctuation, and style errors.`,
     prompt: `Analyze the mood or tone of the following text and assign it a grade from A+ (very positive) to F (very negative). 
 
 The grading scale is:
@@ -184,21 +177,7 @@ Respond with ONLY the grade letter (e.g., "A+", "B-", "F") and nothing else.`,
 
   const finalGrade = validGrades.includes(grade) ? grade : "C";
 
-  const { text: reasonText } = await generateText({
-    model,
-    prompt: `You just assigned the mood grade "${finalGrade}" to this text: "${text}"
-
-Provide a brief, one-sentence explanation for why this grade was assigned. Keep it concise and helpful (maximum 20 words).
-
-Example: "The text expresses deep frustration and disappointment."
-Example: "The text shows genuine joy and enthusiasm."
-
-Respond with ONLY the explanation sentence, nothing else.`,
-  });
-
-  const reason = reasonText.trim() || "Neutral mood detected.";
-
-  return { grade: finalGrade, reason };
+  return { grade: finalGrade };
 };
 
 const analyzeCategories = async (text: string): Promise<string[]> => {
@@ -505,7 +484,6 @@ export const create = action({
       text: args.text,
       userId: currentUser._id,
       mood: moodAnalysis.grade,
-      moodReason: moodAnalysis.reason,
       tagIds: tagIds,
       grammarSuggestions:
         grammarSuggestions.length > 0 ? grammarSuggestions : undefined,

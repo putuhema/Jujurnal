@@ -97,11 +97,6 @@ export const Posts = () => {
                       </Badge>
                     )}
                   </div>
-                  {post.moodReason && (
-                    <div className="text-xs text-muted-foreground mt-1 mb-2">
-                      {post.moodReason}
-                    </div>
-                  )}
                   {post.tags && post.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-2 mb-2">
                       {post.tags.map((tag: any) => (

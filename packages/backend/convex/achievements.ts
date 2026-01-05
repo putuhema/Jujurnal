@@ -1,9 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { authComponent } from "./auth";
 
-// Badge definitions
 export type BadgeId =
   | "first_post"
   | "posts_10"
@@ -129,7 +127,6 @@ export const BADGE_DEFINITIONS: Record<BadgeId, BadgeDefinition> = {
   },
 };
 
-// Get all achievements for the current user
 export const getUserAchievements = query({
   handler: async (ctx) => {
     const currentUser = await authComponent.safeGetAuthUser(ctx);
@@ -149,7 +146,6 @@ export const getUserAchievements = query({
   },
 });
 
-// Check if user has a specific badge
 export const hasBadge = query({
   args: {
     badgeId: v.string(),
@@ -171,14 +167,12 @@ export const hasBadge = query({
   },
 });
 
-// Internal mutation to unlock a badge
 export const unlockBadgeInternal = internalMutation({
   args: {
     userId: v.string(),
     badgeId: v.string(),
   },
   handler: async (ctx, args) => {
-    // Check if badge already exists
     const existing = await ctx.db
       .query("achievements")
       .withIndex("by_userId_badgeId", (q) =>
@@ -187,10 +181,9 @@ export const unlockBadgeInternal = internalMutation({
       .first();
 
     if (existing) {
-      return existing._id; // Already unlocked
+      return existing._id;
     }
 
-    // Unlock the badge
     return await ctx.db.insert("achievements", {
       userId: args.userId,
       badgeId: args.badgeId,
@@ -199,7 +192,6 @@ export const unlockBadgeInternal = internalMutation({
   },
 });
 
-// Check and unlock badges based on post count
 export const checkPostCountBadges = internalMutation({
   args: {
     userId: v.string(),
@@ -276,7 +268,6 @@ export const checkStreakBadges = internalMutation({
   },
 });
 
-// Check and unlock perfect grammar badge
 export const checkPerfectGrammarBadge = internalMutation({
   args: {
     userId: v.string(),
@@ -284,7 +275,7 @@ export const checkPerfectGrammarBadge = internalMutation({
   },
   handler: async (ctx, args) => {
     if (args.hasGrammarSuggestions) {
-      return []; // No badge if there are grammar suggestions
+      return [];
     }
 
     const badgeId: BadgeId = "perfect_grammar";
@@ -308,7 +299,6 @@ export const checkPerfectGrammarBadge = internalMutation({
   },
 });
 
-// Check and unlock summary badges
 export const checkSummaryBadges = internalMutation({
   args: {
     userId: v.string(),
@@ -338,7 +328,6 @@ export const checkSummaryBadges = internalMutation({
   },
 });
 
-// Get all badge definitions
 export const getAllBadges = query({
   handler: async () => {
     return Object.values(BADGE_DEFINITIONS);
