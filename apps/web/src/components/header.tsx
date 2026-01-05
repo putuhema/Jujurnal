@@ -3,6 +3,7 @@ import Link from "next/link";
 import { buttonVariants } from "./ui/button";
 import { LogginUser } from "./loggin-user";
 import { cn } from "@/lib/utils";
+import { ModeToggle } from "./mode-toggle";
 
 export default function Header() {
   return (
@@ -19,7 +20,10 @@ export default function Header() {
             jujurnal
           </Link>
         </nav>
-        <LogginUser />
+        <div className="flex items-center gap-2">
+          <ModeToggle />
+          <LogginUser />
+        </div>
       </div>
     </div>
   );

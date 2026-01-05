@@ -1,32 +1,104 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
 import * as React from "react";
+import Script from "next/script";
+import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
+export const DARK_MODE_FORWARD_TYPE = "dark-mode-forward";
 
 export function ModeToggle() {
-  const { setTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
+
+  const toggleTheme = React.useCallback(() => {
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
+  }, [resolvedTheme, setTheme]);
+
+  React.useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if ((e.key === "d" || e.key === "D") && !e.metaKey && !e.ctrlKey) {
+        if (
+          (e.target instanceof HTMLElement && e.target.isContentEditable) ||
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLSelectElement
+        ) {
+          return;
+        }
+
+        e.preventDefault();
+        toggleTheme();
+      }
+    };
+
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [toggleTheme]);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="icon" />}>
-        <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-        <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-        <span className="sr-only">Toggle theme</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>Light</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>Dark</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="ghost"
+      size="icon"
+      className="group/toggle extend-touch-target size-8"
+      onClick={toggleTheme}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="size-4.5"
+      >
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+        <path d="M12 3l0 18" />
+        <path d="M12 9l4.65 -4.65" />
+        <path d="M12 14.3l7.37 -7.37" />
+        <path d="M12 19.6l8.85 -8.85" />
+      </svg>
+      <span className="sr-only">Toggle theme</span>
+    </Button>
+  );
+}
+
+export function DarkModeScript() {
+  return (
+    <Script
+      id="dark-mode-listener"
+      strategy="beforeInteractive"
+      dangerouslySetInnerHTML={{
+        __html: `
+            (function() {
+              // Forward D key
+              document.addEventListener('keydown', function(e) {
+                if ((e.key === 'd' || e.key === 'D') && !e.metaKey && !e.ctrlKey) {
+                  if (
+                    (e.target instanceof HTMLElement && e.target.isContentEditable) ||
+                    e.target instanceof HTMLInputElement ||
+                    e.target instanceof HTMLTextAreaElement ||
+                    e.target instanceof HTMLSelectElement
+                  ) {
+                    return;
+                  }
+                  e.preventDefault();
+                  if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                      type: '${DARK_MODE_FORWARD_TYPE}',
+                      key: e.key
+                    }, '*');
+                  }
+                }
+              });
+
+            })();
+          `,
+      }}
+    />
   );
 }
