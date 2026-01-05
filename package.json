@@ -35,5 +35,5 @@
     "typescript": "catalog:",
     "@puma-brain/config": "workspace:*"
   },
-  "packageManager": "pnpm@10.26.1"
+  "packageManager": "bun@1.3.5"
 }
