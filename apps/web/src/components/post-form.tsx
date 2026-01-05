@@ -7,7 +7,13 @@ import { Field, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { Spinner } from "./ui/spinner";
-import { useAction, useQuery } from "convex/react";
+import {
+  Authenticated,
+  AuthLoading,
+  Unauthenticated,
+  useAction,
+  useQuery,
+} from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { SparkleIcon } from "@phosphor-icons/react";
 
@@ -62,73 +68,78 @@ export const PostForm = () => {
     },
   });
 
-  if (!user) return null;
-
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        form.handleSubmit();
-      }}
-    >
-      <FieldGroup>
-        <form.Field
-          name="post"
-          children={(field) => {
-            const isInvalid =
-              field.state.meta.isTouched && !field.state.meta.isValid;
-            const charCount = field.state.value.length;
-            const maxLength = 140;
-            return (
-              <Field data-invalid={isInvalid}>
-                <Textarea
-                  id={field.name}
-                  name={field.name}
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  aria-invalid={isInvalid}
-                  placeholder={`${user.name}, anything on your mind?`}
-                  autoComplete="off"
-                  maxLength={maxLength}
-                  disabled={isLoading}
-                  className={isLoading ? "opacity-60" : ""}
-                />
-                <div className="flex items-center justify-between gap-2">
-                  {isLoading && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
-                      <Spinner className="size-4" />
-                      <span>{loadingMessage}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 ml-auto">
-                    <div className="text-muted-foreground text-right text-xs mt-1">
-                      {charCount}/{maxLength}
-                    </div>
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="min-w-[100px]"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Spinner className="size-4 mr-2" />
-                          <span>Posting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <SparkleIcon className="size-4 mr-2" />
-                          <span>Post</span>
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </Field>
-            );
+    <>
+      <Authenticated>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
           }}
-        />
-      </FieldGroup>
-    </form>
+        >
+          <FieldGroup>
+            <form.Field
+              name="post"
+              children={(field) => {
+                const isInvalid =
+                  field.state.meta.isTouched && !field.state.meta.isValid;
+                const charCount = field.state.value.length;
+                const maxLength = 140;
+                return (
+                  <Field data-invalid={isInvalid}>
+                    <Textarea
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      aria-invalid={isInvalid}
+                      placeholder={`${user?.name}, anything on your mind?`}
+                      autoComplete="off"
+                      maxLength={maxLength}
+                      disabled={isLoading}
+                      className={isLoading ? "opacity-60" : ""}
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      {isLoading && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+                          <Spinner className="size-4" />
+                          <span>{loadingMessage}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 ml-auto">
+                        <div className="text-muted-foreground text-right text-xs mt-1">
+                          {charCount}/{maxLength}
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={isLoading}
+                          className="min-w-[100px]"
+                        >
+                          {isLoading ? (
+                            <>
+                              <Spinner className="size-4 mr-2" />
+                              <span>Posting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <SparkleIcon className="size-4 mr-2" />
+                              <span>Post</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </Field>
+                );
+              }}
+            />
+          </FieldGroup>
+        </form>
+      </Authenticated>
+      <Unauthenticated>
+        <div></div>
+      </Unauthenticated>
+    </>
   );
 };

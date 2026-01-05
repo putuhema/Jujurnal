@@ -11,12 +11,18 @@ import { internal } from "./_generated/api";
 import { authComponent } from "./auth";
 import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
+import { paginationOptsValidator } from "convex/server";
 
 export const getAll = query({
-  handler: async (ctx) => {
-    const posts = await ctx.db.query("posts").order("desc").collect();
-    return Promise.all(
-      (posts ?? []).map(async (post) => {
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, args) => {
+    const posts = await ctx.db
+      .query("posts")
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const page = await Promise.all(
+      (posts.page ?? []).map(async (post) => {
         const user = await authComponent.getAnyUserById(ctx, post.userId);
         const tags = post.tagIds
           ? await Promise.all(
@@ -32,6 +38,11 @@ export const getAll = query({
         return { ...post, user, tags: validTags };
       })
     );
+
+    return {
+      ...posts,
+      page,
+    };
   },
 });
 

@@ -14,28 +14,34 @@ export const Streak = () => {
   return (
     <div className="p-4 flex items-center justify-between flex-wrap gap-4">
       <div className="flex items-center gap-2">
-        <FireIcon size={32} />
+        <FireIcon className="h-6 w-6" />
         <div className="col-span-2">
-          <p className="text-xs text-muted-foreground">CURRENT STREAK</p>
-          <p className="text-xl">
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            CURRENT STREAK
+          </p>
+          <p className="text-lg sm:text-xl">
             {currentStreak} {currentStreak === 1 ? "day" : "days"}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <MedalIcon size={32} />
+        <MedalIcon className="h-6 w-6" />
         <div>
-          <p className="text-xs text-muted-foreground">LONGEST STREAK</p>
-          <p className="text-xl">
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            LONGEST STREAK
+          </p>
+          <p className="text-lg sm:text-xl">
             {longestStreak} {longestStreak === 1 ? "day" : "days"}
           </p>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <TargetIcon size={32} />
+        <TargetIcon className="h-6 w-6" />
         <div>
-          <p className="text-xs text-muted-foreground">TOTAL POSTS</p>
-          <p className="text-xl">{totalPosts}/365</p>
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            TOTAL POSTS
+          </p>
+          <p className="text-lg sm:text-xl">{totalPosts}/365</p>
         </div>
       </div>
     </div>

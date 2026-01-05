@@ -1,3 +1,5 @@
+"use client";
+
 import { authClient } from "@/lib/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -13,6 +15,7 @@ import { SocialLogin } from "./social-login";
 import { SignOutIcon, UserIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
+import { Skeleton } from "./ui/skeleton";
 
 export const LogginUser = () => {
   const { data } = authClient.useSession();
@@ -35,13 +38,27 @@ export const LogginUser = () => {
               Profile
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
+            <DropdownMenuItem
+              onClick={() => {
+                authClient.signOut({
+                  fetchOptions: {
+                    onSuccess: () => {
+                      router.push("/");
+                    },
+                  },
+                });
+              }}
+              variant="destructive"
+            >
               <SignOutIcon />
               Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </Authenticated>
+      <AuthLoading>
+        <Skeleton className="w-7 h-7 rounded-full" />
+      </AuthLoading>
       <Unauthenticated>
         <SocialLogin />
       </Unauthenticated>

@@ -24,7 +24,7 @@ export const SocialLogin = () => {
       }}
     >
       <GithubLogoIcon />
-      Login with github
+      Login
     </Button>
   );
 };

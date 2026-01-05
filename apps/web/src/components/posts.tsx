@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { useState } from "react";
 
 import { format } from "date-fns";
@@ -38,13 +38,20 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 
 export const Posts = () => {
-  const posts = useQuery(api.post.getAll);
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.post.getAll,
+    {},
+    {
+      initialNumItems: 17,
+    }
+  );
+
   const deletePost = useMutation(api.post.deletePost);
   const applyCorrections = useMutation(api.post.applyGrammarCorrections);
   return (
     <div className="space-y-2">
-      {posts &&
-        posts.map((post: any) => {
+      {results &&
+        results.map((post: any) => {
           const PostItem = ({ post }: { post: any }) => {
             const [showOriginal, setShowOriginal] = useState(false);
             const [isApplying, setIsApplying] = useState(false);
@@ -70,7 +77,7 @@ export const Posts = () => {
             };
 
             return (
-              <Item variant="outline">
+              <Item variant="outline" className="border-none">
                 <ItemMedia>
                   <Avatar className="size-10">
                     <AvatarImage src={post.user.image} />
@@ -229,6 +236,15 @@ export const Posts = () => {
 
           return <PostItem key={post._id} post={post} />;
         })}
+      {status === "CanLoadMore" && (
+        <Button
+          onClick={() => loadMore(17)}
+          variant="outline"
+          className="w-full"
+        >
+          Load More
+        </Button>
+      )}
     </div>
   );
 };
