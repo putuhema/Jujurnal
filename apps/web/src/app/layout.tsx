@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "puma-brain",
-  description: "puma-brain",
+  title: "Jujurnal",
+  description: "Write your thought, ease your mind.",
 };
 
 export default async function RootLayout({
