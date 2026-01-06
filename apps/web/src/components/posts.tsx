@@ -36,8 +36,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { authClient } from "@/lib/auth-client";
 
 export const Posts = () => {
+  const { data: session } = authClient.useSession();
   const { results, status, loadMore } = usePaginatedQuery(
     api.post.getAll,
     {},
@@ -98,7 +100,7 @@ export const Posts = () => {
                         Mood: {post.mood}
                       </span>
                     )}
-                    {isEdited && (
+                    {session?.user.id === post.user._id && isEdited && (
                       <Badge variant="secondary" className="text-xs">
                         Edited
                       </Badge>
@@ -125,17 +127,19 @@ export const Posts = () => {
                     >
                       {displayText}
                     </p>
-                    {isEdited && post.originalBody && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs h-auto py-1"
-                        onClick={() => setShowOriginal(!showOriginal)}
-                      >
-                        <ArrowCounterClockwiseIcon className="size-3 mr-1" />
-                        {showOriginal ? "Show edited" : "Show original"}
-                      </Button>
-                    )}
+                    {session?.user.id === post.user._id &&
+                      isEdited &&
+                      post.originalBody && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs h-auto py-1"
+                          onClick={() => setShowOriginal(!showOriginal)}
+                        >
+                          <ArrowCounterClockwiseIcon className="size-3 mr-1" />
+                          {showOriginal ? "Show edited" : "Show original"}
+                        </Button>
+                      )}
                   </div>
                   {post.grammarSuggestions &&
                     post.grammarSuggestions.length > 0 && (
@@ -217,18 +221,20 @@ export const Posts = () => {
                     )}
                 </ItemContent>
                 <ItemActions>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger>
-                      <DotsThreeCircleIcon />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => deletePost({ id: post._id })}
-                      >
-                        <TrashSimpleIcon /> Delete Post
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {session?.user.id === post.user._id && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger>
+                        <DotsThreeCircleIcon />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => deletePost({ id: post._id })}
+                        >
+                          <TrashSimpleIcon /> Delete Post
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </ItemActions>
               </Item>
             );
