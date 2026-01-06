@@ -37,6 +37,38 @@ import {
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
+
+type MoodGrade =
+  | "A+"
+  | "A"
+  | "A-"
+  | "B+"
+  | "B"
+  | "B-"
+  | "C+"
+  | "C"
+  | "C-"
+  | "D+"
+  | "D"
+  | "D-"
+  | "F";
+
+const moodColors: Record<MoodGrade, string> = {
+  "A+": "bg-[#216e39] text-white",
+  A: "bg-[#30a14e] text-white",
+  "A-": "bg-[#40c463] text-white",
+  "B+": "bg-[#9be9a8] text-[#216e39]",
+  B: "bg-[#9be9a8] text-[#216e39]",
+  "B-": "bg-[#9be9a8] text-[#216e39]",
+  "C+": "bg-[#ffec44] text-[#8b6914]",
+  C: "bg-[#ffec44] text-[#8b6914]",
+  "C-": "bg-[#ffec44] text-[#8b6914]",
+  "D+": "bg-[#fd7e14] text-white",
+  D: "bg-[#fd7e14] text-white",
+  "D-": "bg-[#fd7e14] text-white",
+  F: "bg-[#d73a4a] text-white",
+};
 
 export const Posts = () => {
   const { data: session } = authClient.useSession();
@@ -96,29 +128,16 @@ export const Posts = () => {
                       )}
                     </ItemDescription>
                     {post.mood && (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted">
-                        Mood: {post.mood}
+                      <span
+                        className={cn(
+                          "text-xs font-semibold px-2 py-0.5 rounded",
+                          moodColors[post.mood as MoodGrade]
+                        )}
+                      >
+                        {post.mood}
                       </span>
                     )}
-                    {session?.user.id === post.user._id && isEdited && (
-                      <Badge variant="secondary" className="text-xs">
-                        Edited
-                      </Badge>
-                    )}
                   </div>
-                  {post.tags && post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-2 mb-2">
-                      {post.tags.map((tag: any) => (
-                        <Badge
-                          key={tag._id}
-                          variant="outline"
-                          className="text-xs font-normal"
-                        >
-                          {tag.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
                   <div className="space-y-2">
                     <p
                       className={
