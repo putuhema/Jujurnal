@@ -123,7 +123,7 @@ export const MoodTracker = () => {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
 
-  const moodData = useQuery(api.post.getYearMoodData, {
+  const moodData = useQuery(api.mood.getYearMoodData, {
     year: selectedYear,
   });
 

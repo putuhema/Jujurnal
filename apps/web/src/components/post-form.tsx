@@ -2,47 +2,25 @@
 
 import { useForm } from "@tanstack/react-form";
 import z from "zod";
-import { useState, useEffect } from "react";
 import { Field, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
-import { Spinner } from "./ui/spinner";
+
 import {
   Authenticated,
-  AuthLoading,
   Unauthenticated,
   useAction,
   useQuery,
 } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { SparkleIcon } from "@phosphor-icons/react";
+import { useLanguage } from "./language-provider";
+import { Globe } from "lucide-react";
 
 export const PostForm = () => {
+  const { language } = useLanguage();
   const user = useQuery(api.auth.getCurrentUser);
-  const createPost = useAction(api.post.create);
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingMessage, setLoadingMessage] = useState("");
-
-  useEffect(() => {
-    if (!isLoading) return;
-
-    const messages = [
-      "Analyzing your mood...",
-      "Checking grammar...",
-      "Learning from your words...",
-      "Almost there...",
-    ];
-
-    let messageIndex = 0;
-    setLoadingMessage(messages[0]);
-
-    const interval = setInterval(() => {
-      messageIndex = (messageIndex + 1) % messages.length;
-      setLoadingMessage(messages[messageIndex]);
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [isLoading]);
+  const createPost = useAction(api.posts.create);
 
   const form = useForm({
     defaultValues: {
@@ -54,17 +32,11 @@ export const PostForm = () => {
       }),
     },
     onSubmit: async ({ value }) => {
-      setIsLoading(true);
-      try {
-        await createPost({
-          text: value.post,
-        });
-        form.reset();
-      } catch (error) {
-        console.error("Failed to create post:", error);
-      } finally {
-        setIsLoading(false);
-      }
+      await createPost({
+        text: value.post,
+        lang: language,
+      });
+      form.reset();
     },
   });
 
@@ -97,36 +69,24 @@ export const PostForm = () => {
                       placeholder={`${user?.name}, anything on your mind?`}
                       autoComplete="off"
                       maxLength={maxLength}
-                      disabled={isLoading}
-                      className={isLoading ? "opacity-60" : ""}
                     />
                     <div className="flex items-center justify-between gap-2">
-                      {isLoading && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
-                          <Spinner className="size-4" />
-                          <span>{loadingMessage}</span>
-                        </div>
-                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        <Globe />
+                        {language === "en" ? "English" : "Bahasa Indonesia"}
+                      </Button>
                       <div className="flex items-center gap-2 ml-auto">
                         <div className="text-muted-foreground text-right text-xs mt-1">
                           {charCount}/{maxLength}
                         </div>
-                        <Button
-                          type="submit"
-                          disabled={isLoading}
-                          className="min-w-[100px]"
-                        >
-                          {isLoading ? (
-                            <>
-                              <Spinner className="size-4 mr-2" />
-                              <span>Posting...</span>
-                            </>
-                          ) : (
-                            <>
-                              <SparkleIcon className="size-4 mr-2" />
-                              <span>Post</span>
-                            </>
-                          )}
+                        <Button type="submit" className="min-w-[100px]">
+                          <SparkleIcon className="size-4 mr-2" />
+                          <span>Post</span>
                         </Button>
                       </div>
                     </div>

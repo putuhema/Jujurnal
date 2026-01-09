@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 
 export const Streak = () => {
-  const streakStats = useQuery(api.post.getStreakStats);
+  const streakStats = useQuery(api.streak.getStreakStats);
 
   const currentStreak = streakStats?.currentStreak ?? 0;
   const longestStreak = streakStats?.longestStreak ?? 0;

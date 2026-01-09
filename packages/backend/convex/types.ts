@@ -1,0 +1,21 @@
+export type MoodGrade =
+  | "A+"
+  | "A"
+  | "A-"
+  | "B+"
+  | "B"
+  | "B-"
+  | "C+"
+  | "C"
+  | "C-"
+  | "D+"
+  | "D"
+  | "D-"
+  | "F";
+
+export type GrammarSuggestion = {
+  original: string;
+  corrected: string;
+  explanation: string;
+  issueType: string;
+};

@@ -8,11 +8,15 @@
  * @module
  */
 
-import type * as achievements from "../achievements.js";
+import type * as analysis from "../analysis.js";
 import type * as auth from "../auth.js";
 import type * as healthCheck from "../healthCheck.js";
+import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
-import type * as post from "../post.js";
+import type * as mood from "../mood.js";
+import type * as posts from "../posts.js";
+import type * as streak from "../streak.js";
+import type * as types from "../types.js";
 
 import type {
   ApiFromModules,
@@ -21,11 +25,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  achievements: typeof achievements;
+  analysis: typeof analysis;
   auth: typeof auth;
   healthCheck: typeof healthCheck;
+  helpers: typeof helpers;
   http: typeof http;
-  post: typeof post;
+  mood: typeof mood;
+  posts: typeof posts;
+  streak: typeof streak;
+  types: typeof types;
 }>;
 
 /**

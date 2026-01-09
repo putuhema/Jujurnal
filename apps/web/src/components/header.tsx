@@ -4,6 +4,7 @@ import { buttonVariants } from "./ui/button";
 import { LogginUser } from "./loggin-user";
 import { cn } from "@/lib/utils";
 import { ModeToggle } from "./mode-toggle";
+import { LanguageToggle } from "./language-toggle";
 
 export default function Header() {
   return (
@@ -22,6 +23,7 @@ export default function Header() {
         </nav>
         <div className="flex items-center gap-2">
           <ModeToggle />
+          <LanguageToggle />
           <LogginUser />
         </div>
       </div>

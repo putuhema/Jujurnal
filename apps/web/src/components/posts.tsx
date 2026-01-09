@@ -4,7 +4,7 @@ import { api } from "@puma-brain/backend/convex/_generated/api";
 import { useMutation, usePaginatedQuery } from "convex/react";
 import { useState } from "react";
 
-import { format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import {
   Item,
   ItemActions,
@@ -38,6 +38,7 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "./language-provider";
 
 type MoodGrade =
   | "A+"
@@ -71,17 +72,18 @@ const moodColors: Record<MoodGrade, string> = {
 };
 
 export const Posts = () => {
+  const { language } = useLanguage();
   const { data: session } = authClient.useSession();
   const { results, status, loadMore } = usePaginatedQuery(
-    api.post.getAll,
+    api.posts.getAll,
     {},
     {
       initialNumItems: 17,
     }
   );
 
-  const deletePost = useMutation(api.post.deletePost);
-  const applyCorrections = useMutation(api.post.applyGrammarCorrections);
+  const deletePost = useMutation(api.posts.deletePost);
+  const applyCorrections = useMutation(api.posts.applyGrammarCorrections);
   return (
     <div className="space-y-2">
       {results &&
@@ -121,12 +123,7 @@ export const Posts = () => {
                 <ItemContent>
                   <div className="flex items-center gap-2 flex-wrap">
                     <ItemTitle>{post.user.name}</ItemTitle>
-                    <ItemDescription className="text-xs">
-                      {format(
-                        new Date(post._creationTime),
-                        "dd/MM/yyy HH:mm aaa"
-                      )}
-                    </ItemDescription>
+                    <ItemDescription className="text-xs"></ItemDescription>
                     {post.mood && (
                       <span
                         className={cn(
@@ -146,7 +143,14 @@ export const Posts = () => {
                     >
                       {displayText}
                     </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(post._creationTime), {
+                        addSuffix: true,
+                      })}
+                    </p>
                     {session?.user.id === post.user._id &&
+                      language === "en" &&
                       isEdited &&
                       post.originalBody && (
                         <Button
@@ -160,7 +164,8 @@ export const Posts = () => {
                         </Button>
                       )}
                   </div>
-                  {post.grammarSuggestions &&
+                  {language === "en" &&
+                    post.grammarSuggestions &&
                     post.grammarSuggestions.length > 0 && (
                       <div className="mt-4">
                         <Accordion className="w-full">
