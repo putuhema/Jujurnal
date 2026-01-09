@@ -101,14 +101,12 @@ export const createInternal = internalMutation({
       .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
       .collect();
 
-    // Check streak badges
     const postsByDate = new Set<string>();
     for (const post of posts) {
       const dateStr = getDateString(post._creationTime);
       postsByDate.add(dateStr);
     }
 
-    // Calculate current streak
     let currentStreak = 0;
     const today = getDateString(Date.now());
     if (postsByDate.has(today)) {
@@ -146,6 +144,24 @@ export const createInternal = internalMutation({
   },
 });
 
+export const hasPostedToday = query({
+  args: {},
+  handler: async (ctx) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
+    if (!currentUser) {
+      return false;
+    }
+
+    const today = getDateString(Date.now());
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
+      .collect();
+
+    return posts.some((post) => getDateString(post._creationTime) === today);
+  },
+});
+
 export const create = action({
   args: {
     text: v.string(),
@@ -157,6 +173,22 @@ export const create = action({
 
     if (!currentUser) {
       throw new Error("Not authenticated");
+    }
+
+    const today = getDateString(Date.now());
+    const existingPosts = await ctx.runQuery(
+      internal.posts.getUserPostsInternal,
+      {
+        userId: currentUser._id,
+      }
+    );
+
+    const hasPostedToday = existingPosts.some(
+      (post) => getDateString(post._creationTime) === today
+    );
+
+    if (hasPostedToday) {
+      throw new Error("You can only post once per day");
     }
 
     const shouldAnalyzeGrammar = args.lang === "en";

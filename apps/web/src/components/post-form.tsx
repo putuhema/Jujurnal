@@ -16,11 +16,15 @@ import { api } from "@puma-brain/backend/convex/_generated/api";
 import { SparkleIcon } from "@phosphor-icons/react";
 import { useLanguage } from "./language-provider";
 import { Globe } from "lucide-react";
+import { Alert, AlertDescription } from "./ui/alert";
+import { useState } from "react";
 
 export const PostForm = () => {
   const { language } = useLanguage();
   const user = useQuery(api.auth.getCurrentUser);
+  const hasPostedToday = useQuery(api.posts.hasPostedToday);
   const createPost = useAction(api.posts.create);
+  const [error, setError] = useState<string | null>(null);
 
   const form = useForm({
     defaultValues: {
@@ -32,21 +36,44 @@ export const PostForm = () => {
       }),
     },
     onSubmit: async ({ value }) => {
-      await createPost({
-        text: value.post,
-        lang: language,
-      });
-      form.reset();
+      setError(null);
+      try {
+        await createPost({
+          text: value.post,
+          lang: language,
+        });
+        form.reset();
+      } catch (err: any) {
+        setError(err.message || "Failed to create post");
+      }
     },
   });
+
+  const isDisabled = hasPostedToday === true;
 
   return (
     <>
       <Authenticated>
+        {hasPostedToday && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              {language === "en"
+                ? "You've already posted today. Come back tomorrow!"
+                : "Anda sudah memposting hari ini. Kembali besok!"}
+            </AlertDescription>
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            form.handleSubmit();
+            if (!isDisabled) {
+              form.handleSubmit();
+            }
           }}
         >
           <FieldGroup>
@@ -66,9 +93,16 @@ export const PostForm = () => {
                       onBlur={field.handleBlur}
                       onChange={(e) => field.handleChange(e.target.value)}
                       aria-invalid={isInvalid}
-                      placeholder={`${user?.name}, anything on your mind?`}
+                      placeholder={
+                        isDisabled
+                          ? language === "en"
+                            ? "You've already posted today"
+                            : "Anda sudah memposting hari ini"
+                          : `${user?.name}, anything on your mind?`
+                      }
                       autoComplete="off"
                       maxLength={maxLength}
+                      disabled={isDisabled}
                     />
                     <div className="flex items-center justify-between gap-2">
                       <Button
@@ -76,6 +110,7 @@ export const PostForm = () => {
                         variant="outline"
                         size="sm"
                         className="text-xs"
+                        disabled={isDisabled}
                       >
                         <Globe />
                         {language === "en" ? "English" : "Bahasa Indonesia"}
@@ -84,7 +119,11 @@ export const PostForm = () => {
                         <div className="text-muted-foreground text-right text-xs mt-1">
                           {charCount}/{maxLength}
                         </div>
-                        <Button type="submit" className="min-w-[100px]">
+                        <Button
+                          type="submit"
+                          className="min-w-[100px]"
+                          disabled={isDisabled}
+                        >
                           <SparkleIcon className="size-4 mr-2" />
                           <span>Post</span>
                         </Button>
