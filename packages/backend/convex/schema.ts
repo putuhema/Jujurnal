@@ -34,5 +34,6 @@ export default defineSchema({
     originalBody: v.optional(v.string()),
     isEdited: v.optional(v.boolean()),
     editedAt: v.optional(v.number()),
+    imageStorageId: v.optional(v.id("_storage")),
   }).index("by_authorId", ["userId"]),
 });

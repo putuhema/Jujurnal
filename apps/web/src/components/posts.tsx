@@ -1,8 +1,9 @@
 "use client";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { useState } from "react";
+import Image from "next/image";
 
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -54,6 +55,25 @@ type MoodGrade =
   | "D"
   | "D-"
   | "F";
+
+const PostImage = ({ storageId }: { storageId: string }) => {
+  const imageUrl = useQuery(api.posts.getImageUrl, {
+    storageId: storageId as any,
+  });
+  if (!imageUrl) return null;
+  return (
+    <div className="rounded-lg overflow-hidden border mt-2">
+      <Image
+        src={imageUrl}
+        alt="Post image"
+        width={600}
+        height={400}
+        className="w-full h-auto max-h-96 object-cover"
+        unoptimized
+      />
+    </div>
+  );
+};
 
 const moodColors: Record<MoodGrade, string> = {
   "A+": "bg-[#216e39] text-white",
@@ -143,6 +163,9 @@ export const Posts = () => {
                     >
                       {displayText}
                     </p>
+                    {post.imageStorageId && (
+                      <PostImage storageId={post.imageStorageId} />
+                    )}
 
                     <p className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(post._creationTime), {

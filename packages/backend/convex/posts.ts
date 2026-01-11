@@ -86,6 +86,7 @@ export const createInternal = internalMutation({
         })
       )
     ),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     await ctx.db.insert("posts", {
@@ -94,6 +95,7 @@ export const createInternal = internalMutation({
       mood: args.mood,
       moodReason: args.moodReason,
       grammarSuggestions: args.grammarSuggestions,
+      imageStorageId: args.imageStorageId,
     });
 
     const posts = await ctx.db
@@ -162,10 +164,25 @@ export const hasPostedToday = query({
   },
 });
 
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const getImageUrl = query({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, args) => {
+    return await ctx.storage.getUrl(args.storageId);
+  },
+});
+
 export const create = action({
   args: {
     text: v.string(),
     lang: v.string(),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     "use node";
@@ -208,6 +225,7 @@ export const create = action({
       mood: moodAnalysis.grade,
       grammarSuggestions:
         grammarSuggestions.length > 0 ? grammarSuggestions : undefined,
+      imageStorageId: args.imageStorageId,
     });
   },
 });
