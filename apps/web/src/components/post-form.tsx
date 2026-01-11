@@ -21,6 +21,7 @@ import { Globe } from "lucide-react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useState, useRef } from "react";
 import Image from "next/image";
+import { Spinner } from "./ui/spinner";
 
 export const PostForm = () => {
   const { language } = useLanguage();
@@ -34,6 +35,7 @@ export const PostForm = () => {
     null
   );
   const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,7 +67,6 @@ export const PostForm = () => {
         throw new Error(`Upload failed: ${result.statusText}`);
       }
 
-      // Convex returns JSON with storageId field
       const data = await result.json();
       const storageId = data.storageId || data;
 
@@ -96,11 +97,12 @@ export const PostForm = () => {
     },
     validators: {
       onSubmit: z.object({
-        post: z.string().min(12).max(140),
+        post: z.string().min(12).max(280),
       }),
     },
     onSubmit: async ({ value }) => {
       setError(null);
+      setIsSubmitting(true);
       try {
         await createPost({
           text: value.post,
@@ -111,11 +113,13 @@ export const PostForm = () => {
         handleRemoveImage();
       } catch (err: any) {
         setError(err.message || "Failed to create post");
+      } finally {
+        setIsSubmitting(false);
       }
     },
   });
 
-  const isDisabled = hasPostedToday === true;
+  const isDisabled = hasPostedToday === true || isSubmitting;
 
   return (
     <>
@@ -149,7 +153,7 @@ export const PostForm = () => {
                 const isInvalid =
                   field.state.meta.isTouched && !field.state.meta.isValid;
                 const charCount = field.state.value.length;
-                const maxLength = 140;
+                const maxLength = 280;
                 return (
                   <Field data-invalid={isInvalid}>
                     <Textarea
@@ -229,10 +233,23 @@ export const PostForm = () => {
                         <Button
                           type="submit"
                           className="min-w-[100px]"
-                          disabled={isDisabled || isUploading}
+                          disabled={isDisabled || isUploading || isSubmitting}
                         >
-                          <SparkleIcon className="size-4 mr-2" />
-                          <span>Post</span>
+                          {isSubmitting ? (
+                            <>
+                              <Spinner className="size-4 mr-2" />
+                              <span>
+                                {language === "en"
+                                  ? "Posting..."
+                                  : "Memposting..."}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <SparkleIcon className="size-4 mr-2" />
+                              <span>Post</span>
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
