@@ -21,6 +21,7 @@ import {
   CheckCircleIcon,
   ArrowCounterClockwiseIcon,
   DotsThreeCircleIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 import {
@@ -57,21 +58,51 @@ type MoodGrade =
   | "F";
 
 const PostImage = ({ storageId }: { storageId: string }) => {
+  const [isZoomed, setIsZoomed] = useState(false);
   const imageUrl = useQuery(api.posts.getImageUrl, {
     storageId: storageId as any,
   });
   if (!imageUrl) return null;
   return (
-    <div className="rounded-lg overflow-hidden border mt-2">
-      <Image
-        src={imageUrl}
-        alt="Post image"
-        width={600}
-        height={400}
-        className="w-full h-auto max-h-96 object-cover"
-        unoptimized
-      />
-    </div>
+    <>
+      <div
+        className="rounded-lg overflow-hidden border mt-2 cursor-pointer"
+        onClick={() => setIsZoomed(true)}
+      >
+        <Image
+          src={imageUrl}
+          alt="Post image"
+          width={600}
+          height={400}
+          className="w-full h-auto max-h-96 object-cover"
+          unoptimized
+        />
+      </div>
+      {isZoomed && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setIsZoomed(false)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
+            onClick={() => setIsZoomed(false)}
+          >
+            <XIcon className="size-6" />
+          </button>
+          <div className="max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center">
+            <Image
+              src={imageUrl}
+              alt="Post image zoomed"
+              width={1200}
+              height={800}
+              className="max-w-full max-h-full object-contain"
+              unoptimized
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
