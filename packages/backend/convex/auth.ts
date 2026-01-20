@@ -5,8 +5,9 @@ import { betterAuth } from "better-auth";
 import type { DataModel } from "./_generated/dataModel";
 
 import { components } from "./_generated/api";
-import { query } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import authConfig from "./auth.config";
+import { v } from "convex/values";
 
 const siteUrl = process.env.SITE_URL!;
 
@@ -48,3 +49,20 @@ export const getCurrentUser = query({
     return await authComponent.safeGetAuthUser(ctx);
   },
 });
+
+
+export const changeUsername = mutation({
+  args: {
+    username: v.string()
+  },
+  handler: async (ctx, args ) => {
+    const { auth, headers } = await authComponent.getAuth(createAuth, ctx);
+    
+    await auth.api.updateUser({
+      body: {
+        name: args.username,
+      },
+      headers
+    })
+  }
+})

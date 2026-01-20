@@ -12,7 +12,7 @@ import {
 
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { SocialLogin } from "./social-login";
-import { NoteIcon, PlantIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react";
+import { GearIcon, NoteIcon, PlantIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Skeleton } from "./ui/skeleton";
@@ -51,6 +51,12 @@ export const LogginUser = () => {
               >
                 <PlantIcon />
                 My Plants
+              </DropdownMenuItem>
+            </Link>
+            <Link href="/profile/settings">
+              <DropdownMenuItem>
+                <GearIcon />
+                Settings
               </DropdownMenuItem>
             </Link>
             <DropdownMenuSeparator />
