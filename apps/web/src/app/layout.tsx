@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jujurnal",
+  title: "Frieren",
   description: "Write your thought, ease your mind.",
 };
 

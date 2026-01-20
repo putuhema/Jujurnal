@@ -1,9 +1,8 @@
 "use client";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { useState } from "react";
-import Image from "next/image";
 
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -17,30 +16,18 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   TrashSimpleIcon,
-  BookOpenIcon,
-  CheckCircleIcon,
-  ArrowCounterClockwiseIcon,
   DotsThreeCircleIcon,
-  XIcon,
 } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "./ui/accordion";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "./ui/badge";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
-import { useLanguage } from "./language-provider";
+import Link from "next/link";
 
 type MoodGrade =
   | "A+"
@@ -56,55 +43,6 @@ type MoodGrade =
   | "D"
   | "D-"
   | "F";
-
-const PostImage = ({ storageId }: { storageId: string }) => {
-  const [isZoomed, setIsZoomed] = useState(false);
-  const imageUrl = useQuery(api.posts.getImageUrl, {
-    storageId: storageId as any,
-  });
-  if (!imageUrl) return null;
-  return (
-    <>
-      <div
-        className="rounded-lg overflow-hidden border mt-2 cursor-pointer"
-        onClick={() => setIsZoomed(true)}
-      >
-        <Image
-          src={imageUrl}
-          alt="Post image"
-          width={600}
-          height={400}
-          className="w-full h-auto max-h-96 object-cover"
-          unoptimized
-        />
-      </div>
-      {isZoomed && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setIsZoomed(false)}
-        >
-          <button
-            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
-            onClick={() => setIsZoomed(false)}
-          >
-            <XIcon className="size-6" />
-          </button>
-          <div className="max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center">
-            <Image
-              src={imageUrl}
-              alt="Post image zoomed"
-              width={1200}
-              height={800}
-              className="max-w-full max-h-full object-contain"
-              unoptimized
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
 
 const moodColors: Record<MoodGrade, string> = {
   "A+": "bg-[#216e39] text-white",
@@ -123,7 +61,6 @@ const moodColors: Record<MoodGrade, string> = {
 };
 
 export const Posts = () => {
-  const { language } = useLanguage();
   const { data: session } = authClient.useSession();
   const { results, status, loadMore } = usePaginatedQuery(
     api.posts.getAll,
@@ -134,34 +71,12 @@ export const Posts = () => {
   );
 
   const deletePost = useMutation(api.posts.deletePost);
-  const applyCorrections = useMutation(api.posts.applyGrammarCorrections);
   return (
     <div className="space-y-2">
       {results &&
         results.map((post: any) => {
           const PostItem = ({ post }: { post: any }) => {
-            const [showOriginal, setShowOriginal] = useState(false);
-            const [isApplying, setIsApplying] = useState(false);
-            const displayText =
-              showOriginal && post.originalBody ? post.originalBody : post.body;
-            const isEdited = post.isEdited || false;
-
-            const handleApplyCorrections = async () => {
-              if (
-                !post.grammarSuggestions ||
-                post.grammarSuggestions.length === 0
-              ) {
-                return;
-              }
-              setIsApplying(true);
-              try {
-                await applyCorrections({ id: post._id });
-              } catch (error) {
-                console.error("Failed to apply corrections:", error);
-              } finally {
-                setIsApplying(false);
-              }
-            };
+            const displayText = post.body;
 
             return (
               <Item variant="outline" className="border-none">
@@ -173,7 +88,11 @@ export const Posts = () => {
                 </ItemMedia>
                 <ItemContent>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <ItemTitle>{post.user.name}</ItemTitle>
+                    <Link href={`/profile/post/${post.user._id}`}>
+                    <ItemTitle>
+                      {post.user.name}
+                      </ItemTitle>
+                    </Link>
                     <ItemDescription className="text-xs"></ItemDescription>
                     {post.mood && (
                       <span
@@ -187,116 +106,14 @@ export const Posts = () => {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <p
-                      className={
-                        showOriginal ? "line-through text-muted-foreground" : ""
-                      }
-                    >
-                      {displayText}
-                    </p>
-                    {post.imageStorageId && (
-                      <PostImage storageId={post.imageStorageId} />
-                    )}
+                    <p>{displayText}</p>
 
                     <p className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(post._creationTime), {
                         addSuffix: true,
                       })}
                     </p>
-                    {session?.user.id === post.user._id &&
-                      language === "en" &&
-                      isEdited &&
-                      post.originalBody && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-auto py-1"
-                          onClick={() => setShowOriginal(!showOriginal)}
-                        >
-                          <ArrowCounterClockwiseIcon className="size-3 mr-1" />
-                          {showOriginal ? "Show edited" : "Show original"}
-                        </Button>
-                      )}
                   </div>
-                  {language === "en" &&
-                    post.grammarSuggestions &&
-                    post.grammarSuggestions.length > 0 && (
-                      <div className="mt-4">
-                        <Accordion className="w-full">
-                          <AccordionItem
-                            value={`grammar-suggestions-${post._id}`}
-                          >
-                            <AccordionTrigger className="text-sm">
-                              <div className="flex items-center gap-2">
-                                <BookOpenIcon className="size-4" />
-                                <span>
-                                  Grammar Feedback (
-                                  {post.grammarSuggestions.length}{" "}
-                                  {post.grammarSuggestions.length === 1
-                                    ? "suggestion"
-                                    : "suggestions"}
-                                  )
-                                </span>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <div className="space-y-3 mt-2">
-                                {post.grammarSuggestions.map(
-                                  (suggestion: any, index: number) => (
-                                    <Alert key={index} variant="default">
-                                      <AlertTitle className="flex items-center gap-2 mb-2">
-                                        <Badge variant="outline">
-                                          {suggestion.issueType}
-                                        </Badge>
-                                      </AlertTitle>
-                                      <AlertDescription className="space-y-2">
-                                        <div>
-                                          <span className="text-xs text-muted-foreground">
-                                            Original:{" "}
-                                          </span>
-                                          <span className="line-through text-muted-foreground">
-                                            {suggestion.original}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-xs text-muted-foreground">
-                                            Corrected:{" "}
-                                          </span>
-                                          <span className="font-medium">
-                                            {suggestion.corrected}
-                                          </span>
-                                        </div>
-                                        <div className="pt-2 border-t">
-                                          <span className="text-xs font-medium">
-                                            Why:{" "}
-                                          </span>
-                                          <span className="text-sm">
-                                            {suggestion.explanation}
-                                          </span>
-                                        </div>
-                                      </AlertDescription>
-                                    </Alert>
-                                  )
-                                )}
-                                <div className="pt-2">
-                                  <Button
-                                    onClick={handleApplyCorrections}
-                                    disabled={isApplying}
-                                    size="sm"
-                                    className="w-full"
-                                  >
-                                    <CheckCircleIcon className="size-4 mr-2" />
-                                    {isApplying
-                                      ? "Applying..."
-                                      : "Apply All Corrections"}
-                                  </Button>
-                                </div>
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                      </div>
-                    )}
                 </ItemContent>
                 <ItemActions>
                   {session?.user.id === post.user._id && (

@@ -12,10 +12,11 @@ import {
 
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
 import { SocialLogin } from "./social-login";
-import { SignOutIcon, UserIcon } from "@phosphor-icons/react";
+import { NoteIcon, PlantIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import { Skeleton } from "./ui/skeleton";
+import Link from "next/link";
 
 export const LogginUser = () => {
   const { data } = authClient.useSession();
@@ -37,6 +38,21 @@ export const LogginUser = () => {
               <UserIcon />
               Profile
             </DropdownMenuItem>
+
+            <Link href={`/profile/post/${data?.user.id}`} >
+              <DropdownMenuItem
+              >
+                <NoteIcon />
+                My Post
+              </DropdownMenuItem>
+            </Link>
+            <Link href={`/profile/plants/${data?.user.id}`} >
+              <DropdownMenuItem
+              >
+                <PlantIcon />
+                My Plants
+              </DropdownMenuItem>
+            </Link>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => {

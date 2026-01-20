@@ -21,19 +21,9 @@ export default defineSchema({
       v.literal("F")
     ),
     moodReason: v.optional(v.string()),
-    grammarSuggestions: v.optional(
-      v.array(
-        v.object({
-          original: v.string(),
-          corrected: v.string(),
-          explanation: v.string(),
-          issueType: v.string(),
-        })
-      )
-    ),
-    originalBody: v.optional(v.string()),
-    isEdited: v.optional(v.boolean()),
-    editedAt: v.optional(v.number()),
-    imageStorageId: v.optional(v.id("_storage")),
-  }).index("by_authorId", ["userId"]),
+    flowerId: v.optional(v.number()),
+    year: v.number(),
+  })
+    .index("by_authorId", ["userId"])
+    .index("by_year", ["year"]),
 });

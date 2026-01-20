@@ -13,9 +13,3 @@ export type MoodGrade =
   | "D-"
   | "F";
 
-export type GrammarSuggestion = {
-  original: string;
-  corrected: string;
-  explanation: string;
-  issueType: string;
-};

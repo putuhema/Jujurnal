@@ -4,7 +4,6 @@ import { Streak } from "@/components/streak";
 export default function Profile() {
   return (
     <div className="space-y-6">
-      <Streak />
       <MoodTracker />
     </div>
   );

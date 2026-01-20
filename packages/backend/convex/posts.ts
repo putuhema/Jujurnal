@@ -9,12 +9,10 @@ import {
 import { internal } from "./_generated/api";
 import { authComponent } from "./auth";
 import { paginationOptsValidator } from "convex/server";
-import {
-  analyzeMood,
-  analyzeGrammar,
-  applyCorrectionsToText,
-} from "./analysis";
+import { analyzeMood } from "./analysis";
 import { getDateString, getDateStringForDay } from "./helpers";
+
+const FLOWER_COUNT = 212;
 
 export const getAll = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -35,6 +33,32 @@ export const getAll = query({
       ...posts,
       page,
     };
+  },
+});
+
+export const getById = query({
+  args: { id: v.id("posts") },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.id);
+    if (!post) {
+      return null;
+    }
+    const user = await authComponent.getAnyUserById(ctx, post.userId);
+    return { ...post, user };
+  },
+});
+
+export const getByUserId = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .collect();
+
+    const user = await authComponent.getAnyUserById(ctx, args.userId);
+    return posts.map((post) => ({ ...post, user }));
   },
 });
 
@@ -59,6 +83,9 @@ export const createInternal = internalMutation({
   args: {
     text: v.string(),
     userId: v.string(),
+    nowMs: v.number(),
+    year: v.number(),
+    flowerId: v.number(),
     mood: v.union(
       v.literal("A+"),
       v.literal("A"),
@@ -76,26 +103,20 @@ export const createInternal = internalMutation({
     ),
     moodReason: v.optional(v.string()),
     tagIds: v.optional(v.array(v.id("tags"))),
-    grammarSuggestions: v.optional(
-      v.array(
-        v.object({
-          original: v.string(),
-          corrected: v.string(),
-          explanation: v.string(),
-          issueType: v.string(),
-        })
-      )
-    ),
-    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
+    const flowerId =
+      Number.isFinite(args.flowerId) && args.flowerId > 0
+        ? Math.floor(args.flowerId)
+        : 1;
+
     await ctx.db.insert("posts", {
       body: args.text,
       userId: args.userId,
       mood: args.mood,
       moodReason: args.moodReason,
-      grammarSuggestions: args.grammarSuggestions,
-      imageStorageId: args.imageStorageId,
+      flowerId: ((flowerId - 1) % FLOWER_COUNT) + 1,
+      year: args.year,
     });
 
     const posts = await ctx.db
@@ -110,7 +131,7 @@ export const createInternal = internalMutation({
     }
 
     let currentStreak = 0;
-    const today = getDateString(Date.now());
+    const today = getDateString(args.nowMs);
     if (postsByDate.has(today)) {
       currentStreak = 1;
       let daysAgo = 1;
@@ -164,35 +185,20 @@ export const hasPostedToday = query({
   },
 });
 
-export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.storage.generateUploadUrl();
-  },
-});
-
-export const getImageUrl = query({
-  args: { storageId: v.id("_storage") },
-  handler: async (ctx, args) => {
-    return await ctx.storage.getUrl(args.storageId);
-  },
-});
-
 export const create = action({
   args: {
     text: v.string(),
-    lang: v.string(),
-    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
-    "use node";
     const currentUser = await authComponent.getAuthUser(ctx);
 
     if (!currentUser) {
       throw new Error("Not authenticated");
     }
 
-    const today = getDateString(Date.now());
+    const nowMs = Date.now();
+    const year = new Date(nowMs).getFullYear();
+    const today = getDateString(nowMs);
     const existingPosts = await ctx.runQuery(
       internal.posts.getUserPostsInternal,
       {
@@ -207,66 +213,18 @@ export const create = action({
     if (hasPostedToday) {
       throw new Error("You can only post once per day");
     }
+    const moodAnalysis = await analyzeMood(args.text);
 
-    const shouldAnalyzeGrammar = args.lang === "en";
-    const analysisTasks: Promise<any>[] = [analyzeMood(args.text)];
-
-    if (shouldAnalyzeGrammar) {
-      analysisTasks.push(analyzeGrammar(args.text));
-    }
-
-    const results = await Promise.all(analysisTasks);
-    const moodAnalysis = results[0];
-    const grammarSuggestions = shouldAnalyzeGrammar ? results[1] : [];
+    const flowerId = Math.floor(Math.random() * FLOWER_COUNT) + 1;
 
     await ctx.runMutation(internal.posts.createInternal, {
       text: args.text,
       userId: currentUser._id,
+      nowMs,
+      year,
+      flowerId,
       mood: moodAnalysis.grade,
-      grammarSuggestions:
-        grammarSuggestions.length > 0 ? grammarSuggestions : undefined,
-      imageStorageId: args.imageStorageId,
     });
-  },
-});
-
-export const applyGrammarCorrections = mutation({
-  args: {
-    id: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.id);
-
-    if (!post) {
-      throw new Error("Post not found");
-    }
-
-    const currentUser = await authComponent.safeGetAuthUser(ctx);
-    if (!currentUser || post.userId !== currentUser._id) {
-      throw new Error("Not authorized");
-    }
-
-    if (!post.grammarSuggestions || post.grammarSuggestions.length === 0) {
-      throw new Error("No grammar suggestions available");
-    }
-
-    const baseText = post.originalBody || post.body;
-    const correctedText = applyCorrectionsToText(
-      baseText,
-      post.grammarSuggestions
-    );
-
-    const originalBody = post.originalBody || post.body;
-
-    await ctx.db.patch(args.id, {
-      body: correctedText,
-      originalBody: originalBody,
-      isEdited: true,
-      editedAt: Date.now(),
-      grammarSuggestions: undefined,
-    });
-
-    return { success: true, correctedText };
   },
 });
 

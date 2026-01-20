@@ -8,7 +8,6 @@ import { authClient } from "@/lib/auth-client";
 
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
-import { LanguageProvider } from "./language-provider";
 
 const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
 
@@ -20,7 +19,6 @@ export default function Providers({
   initialToken?: string | null;
 }) {
   return (
-    <LanguageProvider>
       <ThemeProvider
         attribute="class"
         defaultTheme="light"
@@ -36,6 +34,5 @@ export default function Providers({
         </ConvexBetterAuthProvider>
         <Toaster richColors />
       </ThemeProvider>
-    </LanguageProvider>
   );
 }
