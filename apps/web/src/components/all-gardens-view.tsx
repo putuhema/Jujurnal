@@ -4,6 +4,9 @@ import { usePaginatedQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { GardenFlower } from "./garden-flower";
 import { useMemo } from "react";
+import { Button } from "./ui/button";
+import { PlantIcon } from "@phosphor-icons/react";
+import { Badge } from "./ui/badge";
 
 export const AllGardensView = () => {
   const { results, status, loadMore } = usePaginatedQuery(
@@ -75,15 +78,15 @@ export const AllGardensView = () => {
               );
 
               return (
-                <div key={userId}>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold">
+                <div key={userId} className="border p-2 rounded-md space-y-2">
+                  <div className="flex items-center justify-between border-b border-dashed pb-3">
+                    <h3 className=" font-semibold">
                       {garden.user.name}'s Garden
                     </h3>
-                    <span className="text-sm text-muted-foreground">
-                      ({garden.posts.length}{" "}
-                      {garden.posts.length === 1 ? "plant" : "plants"})
-                    </span>
+                    <Badge variant="outline">
+                      <PlantIcon className="text-primary" />
+                      {garden.posts.length}
+                    </Badge>
                   </div>
                   {Object.entries(postsByYear)
                     .sort(([a], [b]) => Number(b) - Number(a))

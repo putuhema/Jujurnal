@@ -1,14 +1,17 @@
+"use client"
+
 import Link from "next/link";
 
 import { buttonVariants } from "./ui/button";
 import { LogginUser } from "./loggin-user";
 import { cn } from "@/lib/utils";
-import { ModeToggle } from "./mode-toggle";
+import { PostDialog } from "@/components/post-dialog";
+import { Authenticated } from "convex/react";
 
 export default function Header() {
   return (
     <div>
-      <div className="flex flex-row items-center justify-between px-2 py-1">
+      <div className="flex flex-row items-center justify-between py-1">
         <nav className="flex gap-4 text-lg">
           <Link
             href="/"
@@ -21,7 +24,9 @@ export default function Header() {
           </Link>
         </nav>
         <div className="flex items-center gap-2">
-          <ModeToggle />
+          <Authenticated>
+            <PostDialog />
+          </Authenticated>
           <LogginUser />
         </div>
       </div>
