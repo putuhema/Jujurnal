@@ -3,14 +3,9 @@
 import { useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { GardenFlower } from "./garden-flower";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
+
 import { useParams } from "next/navigation";
+import { Skeleton } from "./ui/skeleton";
 
 export const GardenView = () => {
   const params = useParams();
@@ -27,12 +22,11 @@ export const GardenView = () => {
 
   if (userPosts === undefined) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Your Journal Garden</CardTitle>
-          <CardDescription>Loading...</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="space-y-2">
+        <Skeleton className="w-full h-12" />
+        <Skeleton className="w-full h-12 opacity-75" />
+        <Skeleton className="w-full h-12 opacity-30" />
+      </div>
     );
   }
 
@@ -50,43 +44,34 @@ export const GardenView = () => {
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Your Journal Garden</CardTitle>
-        <CardDescription>
-          {sortedPosts.length}{" "}
-          {sortedPosts.length === 1 ? "flower" : "flowers"} planted
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {sortedPosts.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No flowers yet. Start journaling to grow your garden!</p>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {Object.entries(postsByYear)
-              .sort(([a], [b]) => Number(b) - Number(a))
-              .map(([year, posts]) => (
-                <div key={year}>
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))]">
-                    {posts.map((post) => (
-                      <GardenFlower
-                        key={post._id}
-                        text={post.body}
-                        flowerId={post.flowerId || 1}
-                        mood={post.mood}
-                        postId={post._id}
-                        size="sm"
-                        createdAt={new Date(post._creationTime)}
-                      />
-                    ))}
-                  </div>
+    <>
+      {sortedPosts.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <p>No flowers yet. Start journaling to grow your garden!</p>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {Object.entries(postsByYear)
+            .sort(([a], [b]) => Number(b) - Number(a))
+            .map(([year, posts]) => (
+              <div key={year}>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))]">
+                  {posts.map((post) => (
+                    <GardenFlower
+                      key={post._id}
+                      text={post.body}
+                      flowerId={post.flowerId || 1}
+                      mood={post.mood}
+                      postId={post._id}
+                      size="md"
+                      createdAt={new Date(post._creationTime)}
+                    />
+                  ))}
                 </div>
-              ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              </div>
+            ))}
+        </div>
+      )}
+    </>
   );
 };

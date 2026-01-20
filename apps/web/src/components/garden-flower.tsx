@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
+import { cn } from "@/lib/utils";
 
 type MoodGrade =
   | "A+"
@@ -42,7 +42,7 @@ const moodToColor: Record<MoodGrade, string> = {
 };
 
 interface GardenFlowerProps {
-  flowerId?: number; // 1-12 (falls back to 1)
+  flowerId?: number;
   mood: MoodGrade;
   postId?: string;
   text: string;
@@ -101,7 +101,7 @@ export const GardenFlower = ({
   if (!flowerSvg) {
     return (
       <div
-        className={`${sizeClasses[size]} flex items-center justify-center border border-dashed rounded`}
+        className={cn("flex items-center justify-center border border-dashed rounded", sizeClasses[size])}
       >
         <div className="w-4 h-4 border-2 border-muted-foreground rounded-full animate-pulse" />
       </div>
@@ -112,7 +112,7 @@ export const GardenFlower = ({
     <Dialog>
       <DialogTrigger>
         <div
-          className={`${sizeClasses[size]} relative cursor-pointer transition-transform hover:scale-110 flex items-center justify-center`}
+          className={cn("relative cursor-pointer transition-transform hover:scale-110 flex items-center justify-center", sizeClasses[size])}
           title={`Mood: ${mood}`}
         >
           <div

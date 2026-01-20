@@ -25,6 +25,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useParams } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type MoodGrade =
   | "A+"
@@ -65,7 +66,31 @@ export default function UserPost() {
   const deletePost = useMutation(api.posts.deletePost);
 
   if (!posts) {
-    return <div>Loading...</div>;
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => (
+          <Item key={i} variant="outline" className="border-none">
+            <ItemMedia>
+              <Skeleton className="size-10 rounded-full" />
+            </ItemMedia>
+            <ItemContent>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-4 w-16 rounded" />
+              </div>
+              <div className="space-y-2 mt-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </ItemContent>
+            <ItemActions>
+              <Skeleton className="size-6 rounded-full" />
+            </ItemActions>
+          </Item>
+        ))}
+      </div>
+    );
   }
 
   if (posts.length === 0) {

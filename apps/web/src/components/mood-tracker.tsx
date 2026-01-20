@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { Skeleton } from "./ui/skeleton";
 
 type MoodGrade =
   | "A+"
@@ -227,41 +228,94 @@ export const MoodTracker = () => {
 
   if (!moodData) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Mood Tracker</CardTitle>
-          <CardDescription>Loading mood data...</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className='space-y-4'>
+        <Skeleton className="w-[120px] h-10 ml-auto" />
+
+        <div className="overflow-x-auto w-full">
+          <div className="inline-block min-w-full">
+            <div className="flex gap-1 md:gap-2">
+              <div className="flex flex-col gap-1">
+                <div className="h-4 md:h-8"></div>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                  <div
+                    key={day}
+                    className="h-4 md:h-8 text-xs md:text-base text-muted-foreground text-right leading-4 md:leading-8"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {months.map((month, monthIndex) => (
+                <div key={month} className="flex flex-col gap-1 w-full">
+                  <Skeleton className="h-4 md:h-8 w-full" />
+
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <Skeleton
+                      key={day}
+                      className="w-full h-4 md:h-8 rounded-sm"
+                    />
+                  ))}
+
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-8 mt-6 flex-wrap">
+              <div className="flex-1 min-w-[300px]">
+                <Skeleton className="h-5 w-20 mb-3" />
+                <div className="space-y-2">
+                  {["A+", "A", "B", "C", "D", "F"].map((grade) => (
+                    <div key={grade} className="flex items-center gap-3">
+                      <Skeleton className="w-12 h-4" />
+                      <div className="flex-1 flex items-center gap-2">
+                        <Skeleton className="flex-1 h-2 rounded-full" />
+                        <Skeleton className="w-20 h-4" />
+                        <Skeleton className="w-16 h-4" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="min-w-[250px]">
+                <Skeleton className="h-5 w-20 mb-3" />
+                <div className="space-y-2">
+                  {["A+", "A", "B", "C", "D", "F"].map((grade) => (
+                    <div key={grade} className="flex items-center gap-2">
+                      <Skeleton className="w-4 h-4 rounded-sm" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{selectedYear} Mood Tracker</CardTitle>
-            <CardDescription>Your daily mood visualization</CardDescription>
-          </div>
-          <Select
-            value={selectedYear.toString()}
-            onValueChange={(value) => setSelectedYear(Number(value))}
-          >
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {yearOptions.map((year) => (
-                <SelectItem key={year} value={year.toString()}>
-                  {year}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <div className='space-y-4'>
+      <Select
+        value={selectedYear.toString()}
+        onValueChange={(value) => setSelectedYear(Number(value))}
+      >
+        <SelectTrigger className="w-[120px] ml-auto">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {yearOptions.map((year) => (
+            <SelectItem key={year} value={year.toString()}>
+              {year}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <div>
+
         <div className="overflow-x-auto w-full">
           <div className="inline-block min-w-full">
             <div className="flex gap-1 md:gap-2">
@@ -381,7 +435,8 @@ export const MoodTracker = () => {
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+
+      </div>
+    </div>
   );
 };
