@@ -20,7 +20,7 @@ export default function Header() {
               className: cn("px-0 pl-0 uppercase"),
             })}
           >
-            Frieren
+            Terriary
           </Link>
         </nav>
         <div className="flex items-center gap-2">
