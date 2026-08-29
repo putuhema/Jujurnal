@@ -10,6 +10,7 @@ import { api } from "@puma-brain/backend/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { BoardThemePicker } from "@/components/board-theme-picker";
 
 export default function Page() {
     const { data: session } = authClient.useSession();
@@ -24,7 +25,7 @@ export default function Page() {
     }, [session?.user?.name]);
 
     return (
-        <div className="max-w-xl space-y-6">
+        <div className="max-w-xl space-y-8">
             <div className="space-y-1">
                 <h1 className="text-xl font-semibold">Settings</h1>
                 <p className="text-sm text-muted-foreground">
@@ -55,8 +56,9 @@ export default function Page() {
                 }}
             >
                 <div className="space-y-1">
-                    <label className="text-sm font-medium">Username</label>
+                    <label htmlFor="username" className="text-sm font-medium">Username</label>
                     <Input
+                        id="username"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         placeholder="e.g. putu_hendra"
@@ -74,6 +76,9 @@ export default function Page() {
                     {isSaving ? "Saving..." : "Save"}
                 </Button>
             </form>
+            <div className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5">
+                <BoardThemePicker />
+            </div>
         </div>
     );
 }

@@ -44,8 +44,8 @@ export const GardenView = () => {
   );
 
   return (
-    <section className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
-      <div className="mb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Your garden</p><h2 className="mt-1 font-display text-3xl tracking-[-0.035em]">A living record of your days.</h2><p className="mt-2 text-sm text-muted-foreground">Each flower holds a note you chose to keep.</p></div>
+    <section className="board-tint paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
+      <div className="mb-6"><p className="board-eyebrow text-xs font-bold uppercase tracking-[0.16em]">Your garden</p><h2 className="board-title mt-1 font-display text-3xl tracking-[-0.035em]">A living record of your days.</h2><p className="board-copy mt-2 text-sm">Each flower holds a note you chose to keep.</p></div>
       {sortedPosts.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-primary/20 bg-background/40 py-12 text-center text-muted-foreground">
           <p>Your first flower is waiting.</p>
@@ -56,7 +56,7 @@ export const GardenView = () => {
             .sort(([a], [b]) => Number(b) - Number(a))
             .map(([year, posts]) => (
               <div key={year}>
-                <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">{year}</p>
+                <p className="board-copy mb-2 text-center text-xs font-bold uppercase tracking-[0.16em]">{year}</p>
                 <IslandGarden posts={posts} />
               </div>
             ))}

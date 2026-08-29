@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
+import { BoardThemeInitializer } from "./board-theme-picker";
 
 const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
 
@@ -25,6 +26,7 @@ export default function Providers({
         enableSystem
         disableTransitionOnChange
       >
+        <BoardThemeInitializer />
         <ConvexBetterAuthProvider
           client={convex}
           authClient={authClient}

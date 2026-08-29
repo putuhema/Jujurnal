@@ -237,3 +237,25 @@ export const deletePost = mutation({
     return { success: true };
   },
 });
+
+export const updatePost = mutation({
+  args: {
+    id: v.id("posts"),
+    body: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await authComponent.getAuthUser(ctx);
+    if (!currentUser) throw new Error("Not authenticated");
+
+    const post = await ctx.db.get(args.id);
+    if (!post) throw new Error("Entry not found");
+    if (post.userId !== currentUser._id) throw new Error("You can only edit your own entries");
+
+    const body = args.body.trim();
+    if (body.length < 12 || body.length > 280) {
+      throw new Error("An entry must be between 12 and 280 characters");
+    }
+
+    await ctx.db.patch(args.id, { body });
+  },
+});

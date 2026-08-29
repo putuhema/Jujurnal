@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   TrashSimpleIcon,
   DotsThreeCircleIcon,
+  PencilSimpleIcon,
 } from "@phosphor-icons/react";
 import {
   DropdownMenu,
@@ -23,12 +24,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 type MoodGrade =
   | "A+"
@@ -63,12 +68,35 @@ export default function UserPost() {
   const { data: session } = authClient.useSession();
   const posts = useQuery(api.posts.getByUserId, { userId });
   const deletePost = useMutation(api.posts.deletePost);
+  const updatePost = useMutation(api.posts.updatePost);
   const [search, setSearch] = useState("");
+  const [editingPost, setEditingPost] = useState<any>(null);
+  const [editedBody, setEditedBody] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const filteredPosts = useMemo(() => {
     if (!posts) return [];
     const query = search.trim().toLowerCase();
     return query ? posts.filter((post) => post.body.toLowerCase().includes(query)) : posts;
   }, [posts, search]);
+
+  const beginEditing = (post: any) => {
+    setEditingPost(post);
+    setEditedBody(post.body);
+  };
+
+  const saveEdit = async () => {
+    if (!editingPost) return;
+    setIsSaving(true);
+    try {
+      await updatePost({ id: editingPost._id, body: editedBody });
+      setEditingPost(null);
+      toast.success("Entry updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn’t update this entry");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (!posts) {
     return (
@@ -155,6 +183,9 @@ export default function UserPost() {
                       <DotsThreeCircleIcon />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => beginEditing(post)}>
+                        <PencilSimpleIcon /> Edit entry
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => deletePost({ id: post._id })}
                       >
@@ -172,6 +203,24 @@ export default function UserPost() {
       })}
       {filteredPosts.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No pages match “{search}”.</p>}
       </div>
+      <Dialog open={Boolean(editingPost)} onOpenChange={(open) => !open && setEditingPost(null)}>
+        <DialogContent>
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle className="font-display text-3xl tracking-[-0.035em]">Refine your words</DialogTitle>
+            <DialogDescription>Your day, feeling, and flower will stay exactly as they are.</DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-3 px-6 pb-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveEdit();
+            }}
+          >
+            <Textarea value={editedBody} onChange={(event) => setEditedBody(event.target.value)} maxLength={280} className="min-h-36" aria-label="Edit entry" />
+            <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">{editedBody.length}/280</span><Button type="submit" disabled={isSaving || editedBody.trim().length < 12}>{isSaving ? "Saving…" : "Save words"}</Button></div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

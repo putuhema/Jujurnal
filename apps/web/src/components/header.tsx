@@ -25,7 +25,7 @@ export default function Header() {
         </nav>
         <div className="flex items-center gap-1.5">
           <Authenticated>
-            <PostDialog />
+            <PostDialog floating />
           </Authenticated>
           <ModeToggle />
           <LogginUser />

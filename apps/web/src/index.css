@@ -5,6 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --board-color: oklch(0.97 0.018 86);
   --radius: 1rem;
   --background: oklch(0.975 0.017 86);
   --foreground: oklch(0.26 0.04 61);
@@ -150,6 +151,15 @@
     animation: island-float 6s ease-in-out infinite;
     will-change: transform;
   }
+  .board-tint {
+    --board-ink: color-mix(in oklab, var(--board-color) 62%, oklch(0.2 0.045 60));
+    --board-copy: color-mix(in oklab, var(--board-color) 48%, oklch(0.39 0.04 60));
+    border-color: color-mix(in oklab, var(--board-color) 45%, var(--border)) !important;
+    background: linear-gradient(145deg, color-mix(in oklab, var(--board-color) 68%, var(--card)), color-mix(in oklab, var(--board-color) 35%, var(--card))) !important;
+  }
+  .board-tint .board-title { color: var(--board-ink); }
+  .board-tint .board-eyebrow { color: color-mix(in oklab, var(--board-color) 72%, oklch(0.31 0.06 60)); }
+  .board-tint .board-copy { color: var(--board-copy); }
   @keyframes island-float {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-8px); }
