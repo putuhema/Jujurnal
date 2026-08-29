@@ -10,6 +10,32 @@ import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { cn } from "@/lib/utils";
 
+const flowerSvgCache = new Map<string, Promise<string>>();
+
+const getColoredFlower = (flowerId: number, color: string): Promise<string> => {
+  const cacheKey = `${flowerId}:${color}`;
+  const cached = flowerSvgCache.get(cacheKey);
+  if (cached) return cached;
+
+  const load = async () => {
+    const response = await fetch(`/flower/${flowerId}.svg`);
+    if (!response.ok) {
+      if (flowerId !== 1) return getColoredFlower(1, color);
+      throw new Error("Missing default flower");
+    }
+    const svg = await response.text();
+    return svg
+      .replace(/#0012D4/g, color)
+      .replace(/width="[^"]*"/g, "")
+      .replace(/height="[^"]*"/g, "")
+      .replace("<svg", '<svg class="w-full h-full"');
+  };
+
+  const promise = load();
+  flowerSvgCache.set(cacheKey, promise);
+  return promise;
+};
+
 type MoodGrade =
   | "A+"
   | "A"
@@ -70,32 +96,19 @@ export const GardenFlower = ({
   const [flowerSvg, setFlowerSvg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/flower/${safeFlowerId}.svg`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Missing flower ${safeFlowerId}`);
-        return res.text();
-      })
+    let isActive = true;
+    setFlowerSvg(null);
+    getColoredFlower(safeFlowerId, color)
       .then((svg) => {
-        let coloredSvg = svg.replace(/#0012D4/g, color);
-        coloredSvg = coloredSvg.replace(/width="[^"]*"/g, '');
-        coloredSvg = coloredSvg.replace(/height="[^"]*"/g, '');
-        coloredSvg = coloredSvg.replace('<svg', '<svg class="w-full h-full"');
-        setFlowerSvg(coloredSvg);
+        if (isActive) setFlowerSvg(svg);
       })
       .catch(() => {
-        fetch(`/flower/1.svg`)
-          .then((res) => {
-            if (!res.ok) throw new Error("Missing flower 1");
-            return res.text();
-          })
-          .then((svg) => {
-            let coloredSvg = svg.replace(/#0012D4/g, color);
-            coloredSvg = coloredSvg.replace(/width="[^"]*"/g, '');
-            coloredSvg = coloredSvg.replace(/height="[^"]*"/g, '');
-            coloredSvg = coloredSvg.replace('<svg', '<svg class="w-full h-full"');
-            setFlowerSvg(coloredSvg);
-          });
+        if (isActive) setFlowerSvg(null);
       });
+
+    return () => {
+      isActive = false;
+    };
   }, [safeFlowerId, color]);
 
   if (!flowerSvg) {

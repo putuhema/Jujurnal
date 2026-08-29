@@ -1,27 +1,26 @@
 import type { Metadata } from "next";
 
-import { Geist, Geist_Mono, Figtree } from "next/font/google";
+import { DM_Sans, DM_Serif_Display } from "next/font/google";
 
 import "../index.css";
 import Header from "@/components/header";
 import Providers from "@/components/providers";
 import { getToken } from "@/lib/auth-server";
 
-const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const dmSerif = DM_Serif_Display({
+  variable: "--font-display",
+  weight: "400",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Frieren",
-  description: "Write your thought, ease your mind.",
+  title: "Jujurnal — a little room for your thoughts",
+  description: "A gentle daily journal that grows with you.",
 };
 
 export default async function RootLayout({
@@ -31,12 +30,10 @@ export default async function RootLayout({
 }>) {
   const token = await getToken();
   return (
-    <html lang="en" suppressHydrationWarning className={figtree.variable}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${dmSans.variable} ${dmSerif.variable} antialiased`}>
         <Providers initialToken={token}>
-          <div className="max-w-2xl mx-auto p-6">
+          <div className="mx-auto min-h-screen max-w-6xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
             <Header />
             {children}
           </div>

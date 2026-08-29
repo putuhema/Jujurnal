@@ -57,7 +57,7 @@ export const changeUsername = mutation({
   },
   handler: async (ctx, args ) => {
     const { auth, headers } = await authComponent.getAuth(createAuth, ctx);
-    
+
     await auth.api.updateUser({
       body: {
         name: args.username,

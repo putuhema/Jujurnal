@@ -11,7 +11,7 @@ import {
   useQuery,
 } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { SparkleIcon } from "@phosphor-icons/react";
+import { ArrowUpRightIcon } from "@phosphor-icons/react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useState } from "react";
 import { Spinner } from "./ui/spinner";
@@ -48,6 +48,11 @@ export const PostForm = () => {
   });
 
   const isDisabled = hasPostedToday === true || isSubmitting;
+  const prompts = [
+    "Something small that felt good today…",
+    "Right now, I’m learning…",
+    "If I could pause this moment, I’d remember…",
+  ];
 
   return (
     <>
@@ -74,6 +79,20 @@ export const PostForm = () => {
               const maxLength = 280;
               return (
                 <Field data-invalid={isInvalid}>
+                  {!isDisabled && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {prompts.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => field.handleChange(field.state.value ? `${field.state.value}\n\n${prompt}` : prompt)}
+                          className="rounded-full border border-primary/15 bg-secondary/45 px-3 py-1.5 text-left text-xs text-secondary-foreground transition-colors hover:border-primary/35 hover:bg-secondary"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <Textarea
                     id={field.name}
                     name={field.name}
@@ -97,20 +116,20 @@ export const PostForm = () => {
                       </div>
                       <Button
                         type="submit"
-                        className="min-w-[100px]"
+                        className="min-w-[110px] rounded-full"
                         disabled={isDisabled || isSubmitting}
                       >
                         {isSubmitting ? (
                           <>
                             <Spinner className="size-4 mr-2" />
                             <span>
-                              Posting...
+                              Planting...
                             </span>
                           </>
                         ) : (
                           <>
-                            <SparkleIcon className="size-4 mr-2" />
-                            <span>Post</span>
+                            <ArrowUpRightIcon className="size-4 mr-2" />
+                            <span>Grow entry</span>
                           </>
                         )}
                       </Button>
