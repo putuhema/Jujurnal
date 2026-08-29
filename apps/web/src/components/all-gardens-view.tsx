@@ -2,14 +2,10 @@
 
 import { usePaginatedQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { GardenFlower } from "./garden-flower";
+import { IslandGarden } from "./island-garden";
 import { useMemo } from "react";
-import { ArrowRightIcon, BookOpenTextIcon, PlantIcon, SparkleIcon } from "@phosphor-icons/react";
+import { BookOpenTextIcon, PlantIcon } from "@phosphor-icons/react";
 import { Badge } from "./ui/badge";
-import { buttonVariants } from "./ui/button";
-import { PostDialog } from "./post-dialog";
-import { Authenticated, Unauthenticated } from "convex/react";
-import Link from "next/link";
 
 export const AllGardensView = () => {
   const { results, status, loadMore } = usePaginatedQuery(
@@ -90,7 +86,7 @@ export const AllGardensView = () => {
               );
 
               return (
-                <div key={userId} className="paper-card group overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5 transition-transform duration-300 hover:-translate-y-1">
+                <div key={userId} className="paper-card overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5">
                   <div className="mb-4 flex items-center justify-between border-b border-dashed border-primary/20 pb-4">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">A growing journal</p>
@@ -106,20 +102,8 @@ export const AllGardensView = () => {
                   {Object.entries(postsByYear)
                     .sort(([a], [b]) => Number(b) - Number(a))
                     .map(([year, posts]) => (
-                      <div key={year} className="garden-grid rounded-2xl p-3">
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(1.75rem,1fr))] gap-1.5">
-                          {posts.map((post) => (
-                            <GardenFlower
-                              key={post._id}
-                              flowerId={post.flowerId || 1}
-                              mood={post.mood}
-                              text={post.body}
-                              postId={post._id}
-                              size="xs"
-                              createdAt={new Date(post._creationTime)}
-                            />
-                          ))}
-                        </div>
+                      <div key={year}>
+                        <IslandGarden posts={posts} size="xs" />
                       </div>
                     ))}
                 </div>

@@ -4,13 +4,6 @@ import { api } from "@puma-brain/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { useState, useMemo } from "react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -35,35 +28,35 @@ type MoodGrade =
   | "F";
 
 const moodColors: Record<MoodGrade, string> = {
-  "A+": "bg-[#216e39] text-white",
-  A: "bg-[#30a14e] text-white",
-  "A-": "bg-[#40c463] text-white",
-  "B+": "bg-[#9be9a8] text-[#216e39]",
-  B: "bg-[#9be9a8] text-[#216e39]",
-  "B-": "bg-[#9be9a8] text-[#216e39]",
-  "C+": "bg-[#ffec44] text-[#8b6914]",
-  C: "bg-[#ffec44] text-[#8b6914]",
-  "C-": "bg-[#ffec44] text-[#8b6914]",
-  "D+": "bg-[#fd7e14] text-white",
-  D: "bg-[#fd7e14] text-white",
-  "D-": "bg-[#fd7e14] text-white",
-  F: "bg-[#d73a4a] text-white",
+  "A+": "bg-emerald-700/75",
+  A: "bg-emerald-600/65",
+  "A-": "bg-emerald-500/55",
+  "B+": "bg-lime-500/45",
+  B: "bg-lime-500/45",
+  "B-": "bg-lime-500/45",
+  "C+": "bg-amber-300/60",
+  C: "bg-amber-300/60",
+  "C-": "bg-amber-300/60",
+  "D+": "bg-orange-300/60",
+  D: "bg-orange-300/60",
+  "D-": "bg-orange-300/60",
+  F: "bg-rose-400/55",
 };
 
 const moodLabels: Record<MoodGrade, string> = {
-  "A+": "Positive core memory",
-  A: "Very positive",
-  "A-": "Very positive",
-  "B+": "Positive",
-  B: "Positive",
-  "B-": "Positive",
-  "C+": "Neutral (or the positive offset the negative)",
-  C: "Neutral (or the positive offset the negative)",
-  "C-": "Neutral (or the positive offset the negative)",
-  "D+": "Negative",
-  D: "Negative",
-  "D-": "Negative",
-  F: "Very negative",
+  "A+": "Sunlit",
+  A: "Bright",
+  "A-": "Bright",
+  "B+": "Growing",
+  B: "Growing",
+  "B-": "Growing",
+  "C+": "Steady",
+  C: "Steady",
+  "C-": "Steady",
+  "D+": "Low tide",
+  D: "Low tide",
+  "D-": "Low tide",
+  F: "Heavy",
 };
 
 const months = [
@@ -297,7 +290,9 @@ export const MoodTracker = () => {
   }
 
   return (
-    <div className='space-y-4'>
+    <section className='paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7'>
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">A year in feelings</p><h2 className="mt-1 font-display text-3xl tracking-[-0.035em]">Your weather, softly seen.</h2></div>
       <Select
         value={selectedYear.toString()}
         onValueChange={(value) => setSelectedYear(Number(value))}
@@ -313,6 +308,7 @@ export const MoodTracker = () => {
           ))}
         </SelectContent>
       </Select>
+      </div>
 
       <div>
 
@@ -367,16 +363,14 @@ export const MoodTracker = () => {
                       return (
                         <div
                           key={day}
-                          className={`w-full h-4 md:h-8 rounded-sm text-xs md:text-base font-semibold md:font-bold ${moodColors[mood]} flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-ring hover:ring-offset-1`}
-                          title={`${month} ${day} - ${mood}: ${moodLabels[mood]}`}
-                        >
-                          {mood}
-                        </div>
+                          className={`h-4 w-full rounded-sm ${moodColors[mood]} cursor-pointer transition-shadow hover:ring-2 hover:ring-ring/40 hover:ring-offset-1`}
+                          title={`${month} ${day} · ${moodLabels[mood]}`}
+                        />
                       );
                     })}
 
-                    <div className="h-8 text-center leading-8 pt-1 font-semibold">
-                      {monthlyAverages?.[monthIndex] || ""}
+                    <div className="flex h-8 items-center justify-center pt-1">
+                      {monthlyAverages?.[monthIndex] && <span className={`size-2.5 rounded-full ${moodColors[monthlyAverages[monthIndex]!]}`} title={`${month} felt ${moodLabels[monthlyAverages[monthIndex]!]}`} />}
                     </div>
                   </div>
                 );
@@ -386,12 +380,12 @@ export const MoodTracker = () => {
             <div className="flex gap-8 mt-6 flex-wrap">
               {stats && (
                 <div className="flex-1 min-w-[300px]">
-                  <h3 className="text-sm font-semibold mb-3">Summary</h3>
+                  <h3 className="text-sm font-semibold mb-3">The shape of your year</h3>
                   <div className="space-y-2">
                     {stats.displayGrades.map(({ grade, count, percentage }) => (
                       <div key={grade} className="flex items-center gap-3">
-                        <div className="w-12 text-xs text-muted-foreground">
-                          {grade}:
+                        <div className="w-16 text-xs text-muted-foreground">
+                          {moodLabels[grade]}
                         </div>
                         <div className="flex-1 flex items-center gap-2">
                           <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
@@ -414,16 +408,14 @@ export const MoodTracker = () => {
               )}
 
               <div className="min-w-[250px]">
-                <h3 className="text-sm font-semibold mb-3">Legend</h3>
+                <h3 className="text-sm font-semibold mb-3">Color key</h3>
                 <div className="space-y-2">
                   {(["A+", "A", "B", "C", "D", "F"] as MoodGrade[]).map(
                     (grade) => (
                       <div key={grade} className="flex items-center gap-2">
                         <div
-                          className={`w-4 h-4 rounded-sm ${moodColors[grade]} text-[8px] flex items-center justify-center font-semibold`}
-                        >
-                          {grade}
-                        </div>
+                          className={`size-4 rounded-full ${moodColors[grade]}`}
+                        />
                         <div className="text-xs text-muted-foreground">
                           {moodLabels[grade]}
                         </div>
@@ -437,6 +429,6 @@ export const MoodTracker = () => {
         </div>
 
       </div>
-    </div>
+    </section>
   );
 };

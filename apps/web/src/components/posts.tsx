@@ -45,19 +45,15 @@ type MoodGrade =
   | "F";
 
 const moodColors: Record<MoodGrade, string> = {
-  "A+": "bg-[#216e39] text-white",
-  A: "bg-[#30a14e] text-white",
-  "A-": "bg-[#40c463] text-white",
-  "B+": "bg-[#9be9a8] text-[#216e39]",
-  B: "bg-[#9be9a8] text-[#216e39]",
-  "B-": "bg-[#9be9a8] text-[#216e39]",
-  "C+": "bg-[#ffec44] text-[#8b6914]",
-  C: "bg-[#ffec44] text-[#8b6914]",
-  "C-": "bg-[#ffec44] text-[#8b6914]",
-  "D+": "bg-[#fd7e14] text-white",
-  D: "bg-[#fd7e14] text-white",
-  "D-": "bg-[#fd7e14] text-white",
-  F: "bg-[#d73a4a] text-white",
+  "A+": "bg-emerald-700/75", A: "bg-emerald-600/65", "A-": "bg-emerald-500/55",
+  "B+": "bg-lime-500/45", B: "bg-lime-500/45", "B-": "bg-lime-500/45",
+  "C+": "bg-amber-300/60", C: "bg-amber-300/60", "C-": "bg-amber-300/60",
+  "D+": "bg-orange-300/60", D: "bg-orange-300/60", "D-": "bg-orange-300/60", F: "bg-rose-400/55",
+};
+
+const moodLabels: Record<MoodGrade, string> = {
+  "A+": "Sunlit", A: "Bright", "A-": "Bright", "B+": "Growing", B: "Growing", "B-": "Growing",
+  "C+": "Steady", C: "Steady", "C-": "Steady", "D+": "Low tide", D: "Low tide", "D-": "Low tide", F: "Heavy",
 };
 
 export const Posts = () => {
@@ -97,11 +93,11 @@ export const Posts = () => {
                     {post.mood && (
                       <span
                         className={cn(
-                          "text-xs font-semibold px-2 py-0.5 rounded",
+                          "text-xs font-medium px-2 py-0.5 rounded-full text-foreground",
                           moodColors[post.mood as MoodGrade]
                         )}
                       >
-                        {post.mood}
+                        {moodLabels[post.mood as MoodGrade]}
                       </span>
                     )}
                   </div>

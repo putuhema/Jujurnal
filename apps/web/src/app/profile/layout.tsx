@@ -7,9 +7,9 @@ export default async function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <div>
-            <Streak />
+        <div className="mx-auto max-w-4xl">
             <ProfileHeader />
+            <Streak />
             {children}
         </div>
     );

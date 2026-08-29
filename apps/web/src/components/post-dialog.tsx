@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PostForm } from "./post-form";
-import { Button, buttonVariants } from "./ui/button";
+import { buttonVariants } from "./ui/button";
 import { PlantIcon, SparkleIcon } from "@phosphor-icons/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
@@ -11,10 +11,11 @@ export const PostDialog = ({ size = "sm" }: { size?: "sm" | "lg" }) => {
   const hasPostedToday = useQuery(api.posts.hasPostedToday);
   if (hasPostedToday) {
     return (
-      <Button disabled size={size} className="rounded-full">
-        <PlantIcon />
-        Write
-      </Button>
+      <div className="flex h-8 items-center gap-1.5 rounded-full border border-primary/15 bg-secondary/50 px-3 text-xs font-medium text-secondary-foreground" title="Today’s flower is already planted">
+        <PlantIcon weight="fill" className="text-primary" />
+        <span className="hidden sm:inline">Today’s flower is planted</span>
+        <span className="sm:hidden">Planted</span>
+      </div>
     );
   }
 
@@ -24,7 +25,7 @@ export const PostDialog = ({ size = "sm" }: { size?: "sm" | "lg" }) => {
         className={buttonVariants({ variant: "default", size, className: "rounded-full shadow-sm" })}
       >
         {size === "lg" ? <SparkleIcon weight="fill" /> : <PlantIcon />}
-        {size === "lg" ? "Write today’s note" : "Write"}
+        Write today
       </DialogTrigger>
       <DialogContent>
         <DialogHeader className="px-6 pt-6">

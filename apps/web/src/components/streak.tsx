@@ -1,6 +1,6 @@
 "use client";
 
-import { FireIcon, MedalIcon, TargetIcon } from "@phosphor-icons/react";
+import { FlowerIcon } from "@phosphor-icons/react";
 import { useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 
@@ -12,38 +12,12 @@ export const Streak = () => {
   const totalPosts = streakStats?.totalPosts ?? 0;
 
   return (
-    <div className="p-4 flex items-center justify-between flex-wrap gap-4">
-      <div className="flex items-center gap-2">
-        <FireIcon className="h-6 w-6" />
-        <div className="col-span-2">
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            CURRENT STREAK
-          </p>
-          <p className="text-lg sm:text-xl">
-            {currentStreak} {currentStreak === 1 ? "day" : "days"}
-          </p>
-        </div>
+    <section className="paper-card mb-8 flex items-center gap-4 rounded-3xl border border-primary/10 bg-card/75 px-5 py-4">
+      <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent text-accent-foreground"><FlowerIcon weight="fill" className="size-5" /></div>
+      <div>
+        <p className="font-display text-xl tracking-[-0.02em]">{currentStreak > 0 ? `${currentStreak}-day gentle rhythm` : "Begin your gentle rhythm"}</p>
+        <p className="text-sm text-muted-foreground">{totalPosts} {totalPosts === 1 ? "flower" : "flowers"} planted{longestStreak > 1 ? ` · your longest rhythm was ${longestStreak} days` : ""}</p>
       </div>
-      <div className="flex items-center gap-2">
-        <MedalIcon className="h-6 w-6" />
-        <div>
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            LONGEST STREAK
-          </p>
-          <p className="text-lg sm:text-xl">
-            {longestStreak} {longestStreak === 1 ? "day" : "days"}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <TargetIcon className="h-6 w-6" />
-        <div>
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            TOTAL POSTS
-          </p>
-          <p className="text-lg sm:text-xl">{totalPosts}/365</p>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 };

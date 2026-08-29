@@ -2,6 +2,7 @@
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
+import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Item,
@@ -26,6 +27,8 @@ import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { useParams } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 
 type MoodGrade =
   | "A+"
@@ -43,19 +46,15 @@ type MoodGrade =
   | "F";
 
 const moodColors: Record<MoodGrade, string> = {
-  "A+": "bg-[#216e39] text-white",
-  A: "bg-[#30a14e] text-white",
-  "A-": "bg-[#40c463] text-white",
-  "B+": "bg-[#9be9a8] text-[#216e39]",
-  B: "bg-[#9be9a8] text-[#216e39]",
-  "B-": "bg-[#9be9a8] text-[#216e39]",
-  "C+": "bg-[#ffec44] text-[#8b6914]",
-  C: "bg-[#ffec44] text-[#8b6914]",
-  "C-": "bg-[#ffec44] text-[#8b6914]",
-  "D+": "bg-[#fd7e14] text-white",
-  D: "bg-[#fd7e14] text-white",
-  "D-": "bg-[#fd7e14] text-white",
-  F: "bg-[#d73a4a] text-white",
+  "A+": "bg-emerald-700/75", A: "bg-emerald-600/65", "A-": "bg-emerald-500/55",
+  "B+": "bg-lime-500/45", B: "bg-lime-500/45", "B-": "bg-lime-500/45",
+  "C+": "bg-amber-300/60", C: "bg-amber-300/60", "C-": "bg-amber-300/60",
+  "D+": "bg-orange-300/60", D: "bg-orange-300/60", "D-": "bg-orange-300/60", F: "bg-rose-400/55",
+};
+
+const moodLabels: Record<MoodGrade, string> = {
+  "A+": "Sunlit", A: "Bright", "A-": "Bright", "B+": "Growing", B: "Growing", "B-": "Growing",
+  "C+": "Steady", C: "Steady", "C-": "Steady", "D+": "Low tide", D: "Low tide", "D-": "Low tide", F: "Heavy",
 };
 
 export default function UserPost() {
@@ -64,6 +63,12 @@ export default function UserPost() {
   const { data: session } = authClient.useSession();
   const posts = useQuery(api.posts.getByUserId, { userId });
   const deletePost = useMutation(api.posts.deletePost);
+  const [search, setSearch] = useState("");
+  const filteredPosts = useMemo(() => {
+    if (!posts) return [];
+    const query = search.trim().toLowerCase();
+    return query ? posts.filter((post) => post.body.toLowerCase().includes(query)) : posts;
+  }, [posts, search]);
 
   if (!posts) {
     return (
@@ -94,19 +99,24 @@ export default function UserPost() {
   }
 
   if (posts.length === 0) {
-    return <div>No posts found</div>;
+    return <div className="paper-card rounded-3xl border border-dashed border-primary/20 bg-card/70 px-6 py-14 text-center text-muted-foreground">Your first page is waiting when you are.</div>;
   }
 
   return (
-    <div className="space-y-2">
-      {posts.map((post: any) => {
+    <section className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Your pages</p><h2 className="mt-1 font-display text-3xl tracking-[-0.035em]">Notes worth keeping.</h2></div>
+        <div className="relative w-full sm:w-64"><MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your words" className="rounded-full pl-9" aria-label="Search entries" /></div>
+      </div>
+      <div className="space-y-3">
+      {filteredPosts.map((post: any) => {
         const PostItem = ({ post }: { post: any }) => {
           const displayText = post.body;
 
           if (!post.user) return null;
 
           return (
-            <Item variant="outline" className="border-none">
+            <Item variant="outline" className="rounded-2xl border-border/60 bg-background/45 px-4 py-3">
               <ItemMedia>
                 <Avatar className="size-10">
                   <AvatarImage src={post.user.image || undefined} />
@@ -120,11 +130,11 @@ export default function UserPost() {
                   {post.mood && (
                     <span
                       className={cn(
-                        "text-xs font-semibold px-2 py-0.5 rounded",
+                        "text-xs font-medium px-2 py-0.5 rounded-full text-foreground",
                         moodColors[post.mood as MoodGrade]
                       )}
                     >
-                      {post.mood}
+                      {moodLabels[post.mood as MoodGrade]}
                     </span>
                   )}
                 </div>
@@ -160,6 +170,8 @@ export default function UserPost() {
 
         return <PostItem key={post._id} post={post} />;
       })}
-    </div>
+      {filteredPosts.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No pages match “{search}”.</p>}
+      </div>
+    </section>
   );
 }

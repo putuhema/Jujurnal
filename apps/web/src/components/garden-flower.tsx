@@ -52,19 +52,15 @@ type MoodGrade =
   | "F";
 
 const moodToColor: Record<MoodGrade, string> = {
-  "A+": "#216e39", // dark green
-  A: "#30a14e", // green
-  "A-": "#40c463", // light green
-  "B+": "#9be9a8", // very light green
-  B: "#9be9a8",
-  "B-": "#9be9a8",
-  "C+": "#ffec44", // yellow
-  C: "#ffec44",
-  "C-": "#ffec44",
-  "D+": "#fd7e14", // orange
-  D: "#fd7e14",
-  "D-": "#fd7e14",
-  F: "#d73a4a", // red
+  "A+": "#c84f67", A: "#d86373", "A-": "#e17b85",
+  "B+": "#d99d42", B: "#d99d42", "B-": "#d99d42",
+  "C+": "#5f9290", C: "#5f9290", "C-": "#5f9290",
+  "D+": "#8b638d", D: "#8b638d", "D-": "#8b638d", F: "#4d6685",
+};
+
+const moodLabels: Record<MoodGrade, string> = {
+  "A+": "Sunlit", A: "Bright", "A-": "Bright", "B+": "Growing", B: "Growing", "B-": "Growing",
+  "C+": "Steady", C: "Steady", "C-": "Steady", "D+": "Low tide", D: "Low tide", "D-": "Low tide", F: "Heavy",
 };
 
 interface GardenFlowerProps {
@@ -87,10 +83,10 @@ export const GardenFlower = ({
   const safeFlowerId = flowerId && flowerId > 0 ? flowerId : 1;
 
   const sizeClasses = {
-    xs: "w-6 h-6",
-    sm: "w-8 h-8",
-    md: "w-12 h-12",
-    lg: "w-16 h-16",
+    xs: "size-10",
+    sm: "size-11",
+    md: "size-16",
+    lg: "size-20",
   };
 
   const [flowerSvg, setFlowerSvg] = useState<string | null>(null);
@@ -125,8 +121,8 @@ export const GardenFlower = ({
     <Dialog>
       <DialogTrigger>
         <div
-          className={cn("relative cursor-pointer transition-transform hover:scale-110 flex items-center justify-center", sizeClasses[size])}
-          title={`Mood: ${mood}`}
+          className={cn("garden-plant island-flower relative z-10 flex cursor-pointer items-center justify-center", sizeClasses[size])}
+          title={`Feeling: ${moodLabels[mood]}`}
         >
           <div
             className="w-full h-full"
@@ -138,8 +134,8 @@ export const GardenFlower = ({
         <div className="grid grid-cols-3 gap-4 px-4">
           <div className="place-self-center relative">
             <div
-              className="w-20 h-20 relative cursor-pointer transition-transform hover:scale-110 flex items-center justify-center"
-              title={`Mood: ${mood}`}
+              className="relative flex h-20 w-20 cursor-pointer items-center justify-center"
+              title={`Feeling: ${moodLabels[mood]}`}
             >
               <div
                 className="w-full h-full"
@@ -147,7 +143,7 @@ export const GardenFlower = ({
               />
             </div>
             <div className="absolute bottom-0 right-0">
-              <Badge variant="outline">{mood}</Badge>
+              <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>
             </div>
           </div>
           <div className="col-span-2">

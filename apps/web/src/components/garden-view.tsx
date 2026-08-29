@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { GardenFlower } from "./garden-flower";
+import { IslandGarden } from "./island-garden";
 
 import { useParams } from "next/navigation";
 import { Skeleton } from "./ui/skeleton";
@@ -44,10 +44,11 @@ export const GardenView = () => {
   );
 
   return (
-    <>
+    <section className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
+      <div className="mb-6"><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Your garden</p><h2 className="mt-1 font-display text-3xl tracking-[-0.035em]">A living record of your days.</h2><p className="mt-2 text-sm text-muted-foreground">Each flower holds a note you chose to keep.</p></div>
       {sortedPosts.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <p>No flowers yet. Start journaling to grow your garden!</p>
+        <div className="rounded-3xl border border-dashed border-primary/20 bg-background/40 py-12 text-center text-muted-foreground">
+          <p>Your first flower is waiting.</p>
         </div>
       ) : (
         <div className="space-y-8">
@@ -55,23 +56,12 @@ export const GardenView = () => {
             .sort(([a], [b]) => Number(b) - Number(a))
             .map(([year, posts]) => (
               <div key={year}>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(3rem,1fr))]">
-                  {posts.map((post) => (
-                    <GardenFlower
-                      key={post._id}
-                      text={post.body}
-                      flowerId={post.flowerId || 1}
-                      mood={post.mood}
-                      postId={post._id}
-                      size="md"
-                      createdAt={new Date(post._creationTime)}
-                    />
-                  ))}
-                </div>
+                <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">{year}</p>
+                <IslandGarden posts={posts} />
               </div>
             ))}
         </div>
       )}
-    </>
+    </section>
   );
 };
