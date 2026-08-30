@@ -37,10 +37,6 @@ export const ProfileHeader = () => {
           ) : null}
         </div>
       </div>
-
-      <p className="mt-5 max-w-xl px-4 text-sm leading-6 text-muted-foreground sm:px-6">
-        A living collection of your thoughts, moods, and every small thing you’ve grown.
-      </p>
     </header>
   );
 };

@@ -1,66 +1,89 @@
 "use client";
 
+import { useState } from "react";
+import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
+
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { IslandGarden } from "./island-garden";
-
-import { useParams } from "next/navigation";
+import { PeriodToggle, type PeriodView } from "./period-toggle";
 import { Skeleton } from "./ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+
+const monthNames = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 export const GardenView = () => {
   const params = useParams();
   const userId = params.id as string;
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  const [view, setView] = useState<PeriodView>("month");
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
+  const userPosts = useQuery(api.posts.getByUserId, userId ? { userId } : "skip");
 
-  const userPosts = useQuery(
-    api.posts.getByUserId,
-    userId ? { userId } : "skip"
-  );
+  const sortedPosts = [...(userPosts ?? [])].sort((a, b) => a._creationTime - b._creationTime);
+  const years = new Set(sortedPosts.map((post) => new Date(post._creationTime).getFullYear()));
+  years.add(currentYear);
+  const yearOptions = [...years].sort((a, b) => b - a);
+  const visiblePosts = sortedPosts.filter((post) => {
+    const date = new Date(post._creationTime);
+    return date.getFullYear() === selectedYear && (view === "year" || date.getMonth() === selectedMonth);
+  });
 
-  if (!userId) {
-    return null;
-  }
+  if (!userId) return null;
 
   if (userPosts === undefined) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="w-full h-12" />
-        <Skeleton className="w-full h-12 opacity-75" />
-        <Skeleton className="w-full h-12 opacity-30" />
+      <div className="paper-card space-y-5 rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
+        <div className="flex justify-between gap-4"><Skeleton className="h-14 w-52" /><Skeleton className="h-9 w-40" /></div>
+        <Skeleton className="aspect-[1157/1120] w-full rounded-3xl" />
       </div>
     );
   }
 
-  const sortedPosts =
-    userPosts?.sort((a, b) => a._creationTime - b._creationTime) || [];
-
-  const postsByYear = sortedPosts.reduce(
-    (acc, post) => {
-      const year = new Date(post._creationTime).getFullYear();
-      if (!acc[year]) acc[year] = [];
-      acc[year].push(post);
-      return acc;
-    },
-    {} as Record<number, typeof sortedPosts>
-  );
+  const periodLabel = view === "month" ? `${monthNames[selectedMonth]} ${selectedYear}` : selectedYear.toString();
 
   return (
     <section className="board-tint paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
-      <div className="mb-6"><p className="board-eyebrow text-xs font-bold uppercase tracking-[0.16em]">Your garden</p><h2 className="board-title mt-1 font-display text-3xl tracking-[-0.035em]">A living record of your days.</h2><p className="board-copy mt-2 text-sm">Each flower holds a note you chose to keep.</p></div>
-      {sortedPosts.length === 0 ? (
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="board-eyebrow text-xs font-bold uppercase tracking-[0.16em]">Your garden · {periodLabel}</p>
+          <h2 className="board-title mt-1 font-display text-3xl tracking-[-0.035em]">A living record of your days.</h2>
+        </div>
+        <PeriodToggle value={view} onChange={setView} />
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        {view === "month" ? (
+          <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(Number(value))}>
+            <SelectTrigger className="min-w-36"><SelectValue>{() => monthNames[selectedMonth]}</SelectValue></SelectTrigger>
+            <SelectContent>{monthNames.map((month, index) => <SelectItem key={month} value={index.toString()} label={month}>{month}</SelectItem>)}</SelectContent>
+          </Select>
+        ) : null}
+        <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(Number(value))}>
+          <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+          <SelectContent>{yearOptions.map((year) => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}</SelectContent>
+        </Select>
+        <span className="board-copy ml-auto text-xs font-medium">{visiblePosts.length} {visiblePosts.length === 1 ? "flower" : "flowers"}</span>
+      </div>
+
+      {visiblePosts.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-primary/20 bg-background/40 py-12 text-center text-muted-foreground">
-          <p>Your first flower is waiting.</p>
+          <div className="mb-2 text-3xl">🌱</div>
+          <p>Nothing planted in {periodLabel} yet.</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {Object.entries(postsByYear)
-            .sort(([a], [b]) => Number(b) - Number(a))
-            .map(([year, posts]) => (
-              <div key={year}>
-                <p className="board-copy mb-2 text-center text-xs font-bold uppercase tracking-[0.16em]">{year}</p>
-                <IslandGarden posts={posts} />
-              </div>
-            ))}
-        </div>
+        <IslandGarden posts={visiblePosts} />
       )}
     </section>
   );
