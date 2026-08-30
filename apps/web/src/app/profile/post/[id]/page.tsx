@@ -133,7 +133,6 @@ export default function UserPost() {
   return (
     <section className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Your pages</p><h2 className="mt-1 font-display text-3xl tracking-[-0.035em]">Notes worth keeping.</h2></div>
         <div className="relative w-full sm:w-64"><MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search your words" className="rounded-full pl-9" aria-label="Search entries" /></div>
       </div>
       <div className="space-y-3">

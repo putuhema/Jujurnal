@@ -89,8 +89,7 @@ export const AllGardensView = () => {
                 <div key={userId} className="board-tint paper-card overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5">
                   <div className="mb-4 flex items-center justify-between border-b border-dashed border-primary/20 pb-4">
                     <div>
-                      <p className="board-eyebrow text-xs font-bold uppercase tracking-[0.14em]">A growing journal</p>
-                      <h3 className="board-title font-display text-2xl tracking-[-0.03em]">
+                      <h3 className="board-title font-display text-xl tracking-[-0.03em]">
                         {garden.user.name}'s garden
                       </h3>
                     </div>

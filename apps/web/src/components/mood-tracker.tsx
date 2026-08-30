@@ -100,7 +100,6 @@ export const MoodTracker = () => {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{periodLabel} in feelings</p>
-          <h2 className="mt-1 font-display text-3xl tracking-[-0.035em]">Your weather, softly seen.</h2>
         </div>
         <PeriodToggle value={view} onChange={setView} />
       </div>

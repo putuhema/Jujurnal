@@ -58,7 +58,6 @@ export const GardenView = () => {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="board-eyebrow text-xs font-bold uppercase tracking-[0.16em]">Your garden · {periodLabel}</p>
-          <h2 className="board-title mt-1 font-display text-3xl tracking-[-0.035em]">A living record of your days.</h2>
         </div>
         <PeriodToggle value={view} onChange={setView} />
       </div>
