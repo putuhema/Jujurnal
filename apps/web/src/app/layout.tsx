@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { DM_Sans, DM_Serif_Display } from "next/font/google";
 
@@ -23,6 +23,13 @@ export const metadata: Metadata = {
   description: "A gentle daily journal that grows with you.",
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fcf6ea" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -33,7 +40,7 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${dmSans.variable} ${dmSerif.variable} antialiased`}>
         <Providers initialToken={token}>
-          <div className="mx-auto min-h-screen max-w-6xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+          <div className="mx-auto min-h-screen max-w-6xl px-4 pb-32 pt-4 sm:px-6 sm:pb-12 lg:px-8">
             <Header />
             {children}
           </div>

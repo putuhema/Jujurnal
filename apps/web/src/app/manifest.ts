@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Write your thought, ease your mind.",
     start_url: "/",
     display: "standalone",
-    theme_color: "#ffffff",
-    background_color: "#ffffff",
+    theme_color: "#fcf6ea",
+    background_color: "#fcf6ea",
     icons: [
       {
         src: "/web-app-manifest-192x192.png",

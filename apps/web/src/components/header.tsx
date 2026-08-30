@@ -7,6 +7,7 @@ import { LogginUser } from "./loggin-user";
 import { PostDialog } from "@/components/post-dialog";
 import { Authenticated } from "convex/react";
 import { ModeToggle } from "./mode-toggle";
+import { MobileNavigation } from "./mobile-navigation";
 
 export default function Header() {
   return (
@@ -25,12 +26,17 @@ export default function Header() {
         </nav>
         <div className="flex items-center gap-1.5">
           <Authenticated>
-            <PostDialog floating />
+            <div className="hidden sm:block">
+              <PostDialog />
+            </div>
           </Authenticated>
           <ModeToggle />
           <LogginUser />
         </div>
       </div>
+      <Authenticated>
+        <MobileNavigation />
+      </Authenticated>
     </div>
   );
 }
