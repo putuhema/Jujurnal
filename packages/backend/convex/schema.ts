@@ -22,6 +22,7 @@ export default defineSchema({
     ),
     moodReason: v.optional(v.string()),
     flowerId: v.optional(v.number()),
+    entryDate: v.optional(v.string()),
     year: v.number(),
   })
     .index("by_authorId", ["userId"])

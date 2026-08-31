@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
-import { useMemo, useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Item,
@@ -68,16 +68,16 @@ export default function UserPost() {
   const { data: session } = authClient.useSession();
   const posts = useQuery(api.posts.getByUserId, { userId });
   const deletePost = useMutation(api.posts.deletePost);
-  const updatePost = useMutation(api.posts.updatePost);
+  const updatePost = useAction(api.posts.updatePost);
   const [search, setSearch] = useState("");
   const [editingPost, setEditingPost] = useState<any>(null);
   const [editedBody, setEditedBody] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const filteredPosts = useMemo(() => {
+  const filteredPosts = (() => {
     if (!posts) return [];
     const query = search.trim().toLowerCase();
     return query ? posts.filter((post) => post.body.toLowerCase().includes(query)) : posts;
-  }, [posts, search]);
+  })();
 
   const beginEditing = (post: any) => {
     setEditingPost(post);
@@ -93,9 +93,8 @@ export default function UserPost() {
       toast.success("Entry updated");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn’t update this entry");
-    } finally {
-      setIsSaving(false);
     }
+    setIsSaving(false);
   };
 
   if (!posts) {
@@ -137,68 +136,62 @@ export default function UserPost() {
       </div>
       <div className="space-y-3">
       {filteredPosts.map((post: any) => {
-        const PostItem = ({ post }: { post: any }) => {
-          const displayText = post.body;
+        if (!post.user) return null;
 
-          if (!post.user) return null;
-
-          return (
-            <Item variant="outline" className="rounded-2xl border-border/60 bg-background/45 px-4 py-3">
-              <ItemMedia>
-                <Avatar className="size-10">
-                  <AvatarImage src={post.user.image || undefined} />
-                  <AvatarFallback>ER</AvatarFallback>
-                </Avatar>
-              </ItemMedia>
-              <ItemContent>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <ItemTitle>{post.user.name}</ItemTitle>
-                  <ItemDescription className="text-xs"></ItemDescription>
-                  {post.mood && (
-                    <span
-                      className={cn(
-                        "text-xs font-medium px-2 py-0.5 rounded-full text-foreground",
-                        moodColors[post.mood as MoodGrade]
-                      )}
-                    >
-                      {moodLabels[post.mood as MoodGrade]}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <p>{displayText}</p>
-
-                  <p className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(post._creationTime), {
-                      addSuffix: true,
-                    })}
-                  </p>
-                </div>
-              </ItemContent>
-              <ItemActions>
-                {session?.user.id === post.user._id && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger>
-                      <DotsThreeCircleIcon />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => beginEditing(post)}>
-                        <PencilSimpleIcon /> Edit entry
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => deletePost({ id: post._id })}
-                      >
-                        <TrashSimpleIcon /> Delete Post
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+        return (
+          <Item key={post._id} variant="outline" className="rounded-2xl border-border/60 bg-background/45 px-4 py-3">
+            <ItemMedia>
+              <Avatar className="size-10">
+                <AvatarImage src={post.user.image || undefined} />
+                <AvatarFallback>ER</AvatarFallback>
+              </Avatar>
+            </ItemMedia>
+            <ItemContent>
+              <div className="flex items-center gap-2 flex-wrap">
+                <ItemTitle>{post.user.name}</ItemTitle>
+                <ItemDescription className="text-xs"></ItemDescription>
+                {post.mood && (
+                  <span
+                    className={cn(
+                      "text-xs font-medium px-2 py-0.5 rounded-full text-foreground",
+                      moodColors[post.mood as MoodGrade]
+                    )}
+                  >
+                    {moodLabels[post.mood as MoodGrade]}
+                  </span>
                 )}
-              </ItemActions>
-            </Item>
-          );
-        };
+              </div>
+              <div className="space-y-2">
+                <p>{post.body}</p>
 
-        return <PostItem key={post._id} post={post} />;
+                <p className="text-xs text-muted-foreground">
+                  {formatDistanceToNow(new Date(post._creationTime), {
+                    addSuffix: true,
+                  })}
+                </p>
+              </div>
+            </ItemContent>
+            <ItemActions>
+              {session?.user.id === post.user._id && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger>
+                    <DotsThreeCircleIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => beginEditing(post)}>
+                      <PencilSimpleIcon /> Edit entry
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => deletePost({ id: post._id })}
+                    >
+                      <TrashSimpleIcon /> Delete Post
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </ItemActions>
+          </Item>
+        );
       })}
       {filteredPosts.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No pages match “{search}”.</p>}
       </div>
@@ -206,7 +199,7 @@ export default function UserPost() {
         <DialogContent>
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="font-display text-3xl tracking-[-0.035em]">Refine your words</DialogTitle>
-            <DialogDescription>Your day, feeling, and flower will stay exactly as they are.</DialogDescription>
+            <DialogDescription>Your day and flower will stay exactly as they are. Your feeling will refresh from your words.</DialogDescription>
           </DialogHeader>
           <form
             className="space-y-3 px-6 pb-6"

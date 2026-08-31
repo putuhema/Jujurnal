@@ -74,8 +74,18 @@ export const getUserPostsInternal = internalQuery({
     return posts.map((post) => ({
       body: post.body,
       mood: post.mood,
+      entryDate: post.entryDate,
       _creationTime: post._creationTime,
     }));
+  },
+});
+
+export const getPostInternal = internalQuery({
+  args: {
+    id: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
   },
 });
 
@@ -84,6 +94,8 @@ export const createInternal = internalMutation({
     text: v.string(),
     userId: v.string(),
     nowMs: v.number(),
+    timeZone: v.string(),
+    entryDate: v.string(),
     year: v.number(),
     flowerId: v.number(),
     mood: v.union(
@@ -116,6 +128,7 @@ export const createInternal = internalMutation({
       mood: args.mood,
       moodReason: args.moodReason,
       flowerId: ((flowerId - 1) % FLOWER_COUNT) + 1,
+      entryDate: args.entryDate,
       year: args.year,
     });
 
@@ -126,17 +139,18 @@ export const createInternal = internalMutation({
 
     const postsByDate = new Set<string>();
     for (const post of posts) {
-      const dateStr = getDateString(post._creationTime);
+      const dateStr =
+        post.entryDate ?? getDateString(post._creationTime, args.timeZone);
       postsByDate.add(dateStr);
     }
 
     let currentStreak = 0;
-    const today = getDateString(args.nowMs);
+    const today = getDateString(args.nowMs, args.timeZone);
     if (postsByDate.has(today)) {
       currentStreak = 1;
       let daysAgo = 1;
       while (true) {
-        const dateStr = getDateStringForDay(daysAgo);
+        const dateStr = getDateStringForDay(args.nowMs, daysAgo, args.timeZone);
         if (postsByDate.has(dateStr)) {
           currentStreak++;
           daysAgo++;
@@ -168,26 +182,31 @@ export const createInternal = internalMutation({
 });
 
 export const hasPostedToday = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { timeZone: v.string() },
+  handler: async (ctx, args) => {
     const currentUser = await authComponent.safeGetAuthUser(ctx);
     if (!currentUser) {
       return false;
     }
 
-    const today = getDateString(Date.now());
+    const today = getDateString(Date.now(), args.timeZone);
     const posts = await ctx.db
       .query("posts")
       .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
       .collect();
 
-    return posts.some((post) => getDateString(post._creationTime) === today);
+    return posts.some(
+      (post) =>
+        (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
+        today
+    );
   },
 });
 
 export const create = action({
   args: {
     text: v.string(),
+    timeZone: v.string(),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -197,8 +216,8 @@ export const create = action({
     }
 
     const nowMs = Date.now();
-    const year = new Date(nowMs).getFullYear();
-    const today = getDateString(nowMs);
+    const today = getDateString(nowMs, args.timeZone);
+    const year = Number(today.slice(0, 4));
     const existingPosts = await ctx.runQuery(
       internal.posts.getUserPostsInternal,
       {
@@ -207,7 +226,9 @@ export const create = action({
     );
 
     const hasPostedToday = existingPosts.some(
-      (post) => getDateString(post._creationTime) === today
+      (post) =>
+        (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
+        today
     );
 
     if (hasPostedToday) {
@@ -221,6 +242,8 @@ export const create = action({
       text: args.text,
       userId: currentUser._id,
       nowMs,
+      timeZone: args.timeZone,
+      entryDate: today,
       year,
       flowerId,
       mood: moodAnalysis.grade,
@@ -238,7 +261,39 @@ export const deletePost = mutation({
   },
 });
 
-export const updatePost = mutation({
+export const updatePostInternal = internalMutation({
+  args: {
+    id: v.id("posts"),
+    body: v.string(),
+    userId: v.string(),
+    mood: v.union(
+      v.literal("A+"),
+      v.literal("A"),
+      v.literal("A-"),
+      v.literal("B+"),
+      v.literal("B"),
+      v.literal("B-"),
+      v.literal("C+"),
+      v.literal("C"),
+      v.literal("C-"),
+      v.literal("D+"),
+      v.literal("D"),
+      v.literal("D-"),
+      v.literal("F")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.id);
+    if (!post) throw new Error("Entry not found");
+    if (post.userId !== args.userId) {
+      throw new Error("You can only edit your own entries");
+    }
+
+    await ctx.db.patch(args.id, { body: args.body, mood: args.mood });
+  },
+});
+
+export const updatePost = action({
   args: {
     id: v.id("posts"),
     body: v.string(),
@@ -247,15 +302,26 @@ export const updatePost = mutation({
     const currentUser = await authComponent.getAuthUser(ctx);
     if (!currentUser) throw new Error("Not authenticated");
 
-    const post = await ctx.db.get(args.id);
-    if (!post) throw new Error("Entry not found");
-    if (post.userId !== currentUser._id) throw new Error("You can only edit your own entries");
-
     const body = args.body.trim();
     if (body.length < 12 || body.length > 280) {
       throw new Error("An entry must be between 12 and 280 characters");
     }
 
-    await ctx.db.patch(args.id, { body });
+    const post = await ctx.runQuery(internal.posts.getPostInternal, {
+      id: args.id,
+    });
+    if (!post) throw new Error("Entry not found");
+    if (post.userId !== currentUser._id) {
+      throw new Error("You can only edit your own entries");
+    }
+
+    const moodAnalysis = await analyzeMood(body);
+
+    await ctx.runMutation(internal.posts.updatePostInternal, {
+      id: args.id,
+      body,
+      userId: currentUser._id,
+      mood: moodAnalysis.grade,
+    });
   },
 });

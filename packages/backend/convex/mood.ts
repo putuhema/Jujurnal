@@ -10,36 +10,27 @@ import {
 import type { MoodGrade } from "./types";
 
 export const getMonthlyMood = query({
-  handler: async (ctx) => {
+  args: {
+    timeZone: v.string(),
+  },
+  handler: async (ctx, args) => {
     const currentUser = await authComponent.safeGetAuthUser(ctx);
     if (!currentUser) {
       return null;
     }
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999
-    );
-
-    const startTimestamp = startOfMonth.getTime();
-    const endTimestamp = endOfMonth.getTime();
+    const currentMonth = getDateString(Date.now(), args.timeZone).slice(0, 7);
 
     const posts = await ctx.db
       .query("posts")
       .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
       .collect();
 
-    const monthlyPosts = posts.filter((post) => {
-      const postTime = post._creationTime;
-      return postTime >= startTimestamp && postTime <= endTimestamp;
-    });
+    const monthlyPosts = posts.filter((post) =>
+      (post.entryDate ?? getDateString(post._creationTime, args.timeZone)).startsWith(
+        currentMonth
+      )
+    );
 
     if (monthlyPosts.length === 0) {
       return null;
@@ -64,6 +55,7 @@ export const getMonthlyMood = query({
 export const getYearMoodData = query({
   args: {
     year: v.number(),
+    timeZone: v.string(),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.safeGetAuthUser(ctx);
@@ -76,19 +68,20 @@ export const getYearMoodData = query({
       .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
       .collect();
 
-    const yearStart = new Date(`${args.year}-01-01T00:00:00Z`).getTime();
-    const yearEnd = new Date(`${args.year}-12-31T23:59:59Z`).getTime();
-
-    const yearPosts = posts.filter((post) => {
-      return post._creationTime >= yearStart && post._creationTime <= yearEnd;
-    });
+    const yearPrefix = `${args.year}-`;
+    const yearPosts = posts.filter((post) =>
+      (post.entryDate ?? getDateString(post._creationTime, args.timeZone)).startsWith(
+        yearPrefix
+      )
+    );
 
     const postsByDate = new Map<
       string,
       { mood: MoodGrade; _creationTime: number }
     >();
     for (const post of yearPosts) {
-      const dateStr = getDateString(post._creationTime);
+      const dateStr =
+        post.entryDate ?? getDateString(post._creationTime, args.timeZone);
       const existing = postsByDate.get(dateStr);
       if (!existing || post._creationTime > existing._creationTime) {
         postsByDate.set(dateStr, {

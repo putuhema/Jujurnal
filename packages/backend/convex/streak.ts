@@ -1,9 +1,11 @@
 import { query } from "./_generated/server";
+import { v } from "convex/values";
 import { authComponent } from "./auth";
 import { getDateString, getDateStringForDay } from "./helpers";
 
 export const getStreakStats = query({
-  handler: async (ctx) => {
+  args: { timeZone: v.string() },
+  handler: async (ctx, args) => {
     const currentUser = await authComponent.safeGetAuthUser(ctx);
     if (!currentUser) {
       return {
@@ -24,14 +26,16 @@ export const getStreakStats = query({
     // Group posts by date (YYYY-MM-DD)
     const postsByDate = new Set<string>();
     for (const post of posts) {
-      const dateStr = getDateString(post._creationTime);
+      const dateStr =
+        post.entryDate ?? getDateString(post._creationTime, args.timeZone);
       postsByDate.add(dateStr);
     }
 
     // Calculate current streak (consecutive days from today backwards)
     // Current streak only counts if there's a post today
     let currentStreak = 0;
-    const today = getDateString(Date.now());
+    const nowMs = Date.now();
+    const today = getDateString(nowMs, args.timeZone);
 
     // Check if there's a post today
     if (postsByDate.has(today)) {
@@ -40,7 +44,7 @@ export const getStreakStats = query({
 
       // Count backwards until we find a day without a post
       while (true) {
-        const dateStr = getDateStringForDay(daysAgo);
+        const dateStr = getDateStringForDay(nowMs, daysAgo, args.timeZone);
         if (postsByDate.has(dateStr)) {
           currentStreak++;
           daysAgo++;

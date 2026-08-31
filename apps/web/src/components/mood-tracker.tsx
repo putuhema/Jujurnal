@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Skeleton } from "./ui/skeleton";
+import { getBrowserTimeZone } from "@/lib/calendar-date";
 
 type MoodGrade =
   | "A+" | "A" | "A-"
@@ -47,11 +48,15 @@ const numberToGrade = (value: number): MoodGrade =>
 
 export const MoodTracker = () => {
   const today = new Date();
+  const timeZone = getBrowserTimeZone();
   const currentYear = today.getFullYear();
   const [view, setView] = useState<PeriodView>("month");
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const moodData = useQuery(api.mood.getYearMoodData, { year: selectedYear });
+  const moodData = useQuery(api.mood.getYearMoodData, {
+    year: selectedYear,
+    timeZone,
+  });
 
   const yearOptions = Array.from({ length: currentYear - 2019 }, (_, index) => currentYear - index);
   const moodMap = new Map<string, MoodGrade>();

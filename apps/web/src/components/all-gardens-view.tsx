@@ -3,9 +3,53 @@
 import { usePaginatedQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { IslandGarden } from "./island-garden";
-import { useMemo } from "react";
 import { BookOpenTextIcon, PlantIcon } from "@phosphor-icons/react";
 import { Badge } from "./ui/badge";
+import { getCalendarDate } from "@/lib/calendar-date";
+import { Skeleton } from "./ui/skeleton";
+import Image from "next/image";
+
+const GardenLoadingCard = () => (
+  <div className="paper-card overflow-hidden rounded-3xl border border-border/70 bg-card/70 p-5">
+    <div className="mb-4 flex items-center justify-between border-b border-dashed border-primary/15 pb-4">
+      <Skeleton className="h-6 w-36 rounded-full bg-primary/10" />
+      <Skeleton className="h-7 w-14 rounded-full bg-primary/10" />
+    </div>
+
+    <div className="relative mx-auto aspect-[1157/1120] w-full max-w-3xl overflow-hidden">
+      <div className="absolute inset-x-[14%] bottom-[17%] h-[12%] rounded-[50%] bg-primary/10 blur-xl" />
+      <Image
+        src="/island.png"
+        alt=""
+        fill
+        sizes="(min-width: 768px) 50vw, 100vw"
+        className="animate-pulse object-contain opacity-20 grayscale motion-reduce:animate-none"
+      />
+      <span className="absolute left-[29%] top-[34%] size-3 animate-bounce rounded-full bg-primary/25 shadow-[0_0_0_5px_oklch(0.7_0.08_135/10%)] motion-reduce:animate-none" />
+      <span className="absolute left-[53%] top-[27%] size-2.5 animate-bounce rounded-full bg-primary/20 [animation-delay:180ms] motion-reduce:animate-none" />
+      <span className="absolute left-[68%] top-[46%] size-3 animate-bounce rounded-full bg-primary/25 [animation-delay:360ms] motion-reduce:animate-none" />
+    </div>
+  </div>
+);
+
+const GardensLoading = () => (
+  <div
+    className="py-8 sm:py-12"
+    role="status"
+    aria-live="polite"
+    aria-label="Loading gardens"
+  >
+    <div className="mb-6 flex gap-2">
+      <Skeleton className="h-8 w-24 rounded-full bg-primary/10" />
+      <Skeleton className="h-8 w-28 rounded-full bg-primary/10" />
+    </div>
+    <div className="grid gap-4 md:grid-cols-2">
+      <GardenLoadingCard />
+      <GardenLoadingCard />
+    </div>
+    <p className="sr-only">Growing the gardens…</p>
+  </div>
+);
 
 export const AllGardensView = () => {
   const { results, status, loadMore } = usePaginatedQuery(
@@ -16,9 +60,11 @@ export const AllGardensView = () => {
     }
   );
 
-  const gardensByUser = useMemo(() => {
-    if (!results) return {};
+  if (status === "LoadingFirstPage") {
+    return <GardensLoading />;
+  }
 
+  const gardensByUser = (() => {
     const gardens: Record<
       string,
       {
@@ -44,13 +90,7 @@ export const AllGardensView = () => {
     });
 
     return gardens;
-  }, [results]);
-
-  if (results === undefined) {
-    return (
-      <div>loading...</div>
-    );
-  }
+  })();
 
   const totalFlowers = results.length;
 
@@ -77,7 +117,10 @@ export const AllGardensView = () => {
             .map(([userId, garden]) => {
               const postsByYear = garden.posts.reduce(
                 (acc, post) => {
-                  const year = new Date(post._creationTime).getFullYear();
+                  const year = getCalendarDate(
+                    post._creationTime,
+                    post.entryDate
+                  ).year;
                   if (!acc[year]) acc[year] = [];
                   acc[year].push(post);
                   return acc;

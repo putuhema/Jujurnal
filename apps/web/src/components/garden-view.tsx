@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { getCalendarDate } from "@/lib/calendar-date";
 
 const monthNames = [
   "January", "February", "March", "April", "May", "June",
@@ -32,12 +33,16 @@ export const GardenView = () => {
   const userPosts = useQuery(api.posts.getByUserId, userId ? { userId } : "skip");
 
   const sortedPosts = [...(userPosts ?? [])].sort((a, b) => a._creationTime - b._creationTime);
-  const years = new Set(sortedPosts.map((post) => new Date(post._creationTime).getFullYear()));
+  const years = new Set(
+    sortedPosts.map(
+      (post) => getCalendarDate(post._creationTime, post.entryDate).year
+    )
+  );
   years.add(currentYear);
   const yearOptions = [...years].sort((a, b) => b - a);
   const visiblePosts = sortedPosts.filter((post) => {
-    const date = new Date(post._creationTime);
-    return date.getFullYear() === selectedYear && (view === "year" || date.getMonth() === selectedMonth);
+    const date = getCalendarDate(post._creationTime, post.entryDate);
+    return date.year === selectedYear && (view === "year" || date.month === selectedMonth);
   });
 
   if (!userId) return null;

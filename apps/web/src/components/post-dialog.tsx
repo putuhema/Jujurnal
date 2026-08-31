@@ -7,6 +7,7 @@ import { PlantIcon, SparkleIcon } from "@phosphor-icons/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { cn } from "@/lib/utils";
+import { getBrowserTimeZone } from "@/lib/calendar-date";
 
 export const PostDialog = ({
   size = "sm",
@@ -17,7 +18,8 @@ export const PostDialog = ({
   floating?: boolean;
   mobileNav?: boolean;
 }) => {
-  const hasPostedToday = useQuery(api.posts.hasPostedToday);
+  const timeZone = getBrowserTimeZone();
+  const hasPostedToday = useQuery(api.posts.hasPostedToday, { timeZone });
   const floatingClass = floating && "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-40 h-11 -translate-x-1/2 px-5 shadow-[0_12px_28px_oklch(0.24_0.04_70/25%)] sm:static sm:h-8 sm:translate-x-0 sm:px-3 sm:shadow-none";
   if (hasPostedToday) {
     if (mobileNav) {

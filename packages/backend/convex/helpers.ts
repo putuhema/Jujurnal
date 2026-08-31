@@ -54,16 +54,57 @@ export const numberToGrade = (num: number): MoodGrade => {
   return "F";
 };
 
-export const getDateString = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+const normalizedTimeZones = new Map<string, string>();
+
+export const normalizeTimeZone = (timeZone: string): string => {
+  const cachedTimeZone = normalizedTimeZones.get(timeZone);
+  if (cachedTimeZone) return cachedTimeZone;
+
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone });
+    normalizedTimeZones.set(timeZone, timeZone);
+    return timeZone;
+  } catch {
+    normalizedTimeZones.set(timeZone, "UTC");
+    return "UTC";
+  }
+};
+
+export const getDateString = (timestamp: number, timeZone: string): string => {
+  const safeTimeZone = normalizeTimeZone(timeZone);
+  let formatter = dateFormatters.get(safeTimeZone);
+
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: safeTimeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    dateFormatters.set(safeTimeZone, formatter);
+  }
+
+  const parts = formatter.formatToParts(new Date(timestamp));
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  if (!year || !month || !day) {
+    throw new Error("Unable to create a calendar date");
+  }
+
   return `${year}-${month}-${day}`;
 };
 
-export const getDateStringForDay = (daysAgo: number): string => {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - daysAgo);
-  return getDateString(date.getTime());
+export const getDateStringForDay = (
+  timestamp: number,
+  daysAgo: number,
+  timeZone: string
+): string => {
+  const [year, month, day] = getDateString(timestamp, timeZone)
+    .split("-")
+    .map(Number);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day - daysAgo));
+  return calendarDate.toISOString().slice(0, 10);
 };

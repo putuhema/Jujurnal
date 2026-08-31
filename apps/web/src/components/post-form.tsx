@@ -16,9 +16,11 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { useState } from "react";
 import { Spinner } from "./ui/spinner";
 import { Sprout } from "lucide-react";
+import { getBrowserTimeZone } from "@/lib/calendar-date";
 
 export const PostForm = () => {
-  const hasPostedToday = useQuery(api.posts.hasPostedToday);
+  const timeZone = getBrowserTimeZone();
+  const hasPostedToday = useQuery(api.posts.hasPostedToday, { timeZone });
   const createPost = useAction(api.posts.create);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -38,6 +40,7 @@ export const PostForm = () => {
       try {
         await createPost({
           text: value.post,
+          timeZone,
         });
         form.reset();
       } catch (err: any) {
