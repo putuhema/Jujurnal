@@ -41,10 +41,79 @@ const monthNames = [
 ];
 const shortMonths = monthNames.map((month) => month.slice(0, 3));
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const moodStatRows = 6;
 
 const gradeToNumber = (grade: MoodGrade) => gradeScale.indexOf(grade) + 1;
 const numberToGrade = (value: number): MoodGrade =>
   gradeScale[Math.max(0, Math.min(gradeScale.length - 1, Math.round(value) - 1))];
+
+const MoodTrackerLoading = ({
+  selectedYear,
+  selectedMonth,
+}: {
+  selectedYear: number;
+  selectedMonth: number;
+}) => {
+  const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+  const leadingDays = new Date(selectedYear, selectedMonth, 1).getDay();
+
+  return (
+    <section
+      className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading mood tracker"
+    >
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <Skeleton className="h-3 w-36 rounded-full bg-primary/10" />
+        <div className="flex h-9 w-36 items-center gap-1 rounded-full border border-border/60 bg-muted/45 p-1">
+          <Skeleton className="h-7 flex-1 rounded-full bg-background/80" />
+          <Skeleton className="h-7 flex-1 rounded-full bg-primary/8" />
+        </div>
+      </div>
+
+      <div className="mb-6 flex gap-2">
+        <Skeleton className="h-9 w-36 rounded-full bg-primary/10" />
+        <Skeleton className="h-9 w-28 rounded-full bg-primary/10" />
+      </div>
+
+      <div className="rounded-3xl border border-border/70 bg-background/35 p-3 sm:p-5">
+        <div className="mb-2 grid grid-cols-7 gap-1">
+          {weekDays.map((day) => (
+            <div key={day} className="flex justify-center py-1">
+              <Skeleton className="h-3 w-7 rounded-full bg-muted/70" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+          {Array.from({ length: leadingDays }, (_, index) => (
+            <div key={`loading-blank-${index}`} />
+          ))}
+          {Array.from({ length: daysInMonth }, (_, index) => (
+            <Skeleton
+              key={`loading-day-${index}`}
+              className="aspect-square rounded-xl border border-border/35 bg-muted/45"
+            />
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-7">
+        <Skeleton className="mb-3 h-5 w-40 rounded-full bg-primary/10" />
+        <div className="space-y-2">
+          {Array.from({ length: moodStatRows }, (_, index) => (
+            <div key={`loading-stat-${index}`} className="flex items-center gap-3">
+              <Skeleton className="h-3 w-16 shrink-0 rounded-full bg-muted/70" />
+              <Skeleton className="h-2 flex-1 rounded-full bg-muted/70" />
+              <Skeleton className="h-3 w-12 shrink-0 rounded-full bg-muted/70" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <span className="sr-only">Preparing your monthly mood garden…</span>
+    </section>
+  );
+};
 
 export const MoodTracker = () => {
   const today = new Date();
@@ -89,10 +158,10 @@ export const MoodTracker = () => {
 
   if (moodData === undefined) {
     return (
-      <div className="paper-card space-y-5 rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
-        <div className="flex justify-between gap-4"><Skeleton className="h-14 w-52" /><Skeleton className="h-9 w-40" /></div>
-        <Skeleton className="h-80 w-full rounded-3xl" />
-      </div>
+      <MoodTrackerLoading
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+      />
     );
   }
 
