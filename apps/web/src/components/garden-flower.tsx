@@ -83,34 +83,11 @@ interface GardenFlowerProps {
   createdAt: Date
 }
 
-type ReactionStatus = {
-  count: number;
-  viewerReacted: boolean;
-  canReact: boolean;
-  unavailableReason: "signedOut" | "owner" | "private" | null;
-};
-
 const sizeClasses = {
   xs: "size-10",
   sm: "size-11",
   md: "size-16",
   lg: "size-20",
-};
-
-const getUnavailableMessage = (reaction: ReactionStatus) => {
-  const people = `${reaction.count} ${reaction.count === 1 ? "person has" : "people have"}`;
-
-  if (reaction.unavailableReason === "owner") {
-    return reaction.count === 0
-      ? "Your plant is waiting for a little water."
-      : `${people} watered your plant.`;
-  }
-  if (reaction.unavailableReason === "signedOut") {
-    return reaction.count === 0
-      ? "Sign in to water this plant."
-      : `${people} watered this plant. Sign in to join them.`;
-  }
-  return "Private plants cannot be watered.";
 };
 
 const PlantReaction = ({
@@ -148,38 +125,27 @@ const PlantReaction = ({
     setIsToggling(false);
   };
 
-  if (reaction === undefined) {
-    return <div className="h-9 animate-pulse rounded-full bg-sky-200/45 dark:bg-sky-900/35" />;
-  }
-  if (reaction === null) return null;
-
-  if (!reaction.canReact) {
-    return (
-      <div className="flex min-h-9 items-center justify-center gap-2 px-3 text-center text-xs text-sky-800/80 dark:text-sky-200/75">
-        <DropIcon weight="fill" />
-        {getUnavailableMessage(reaction)}
-      </div>
-    );
-  }
+  if (!reaction?.canReact) return null;
 
   return (
     <Button
       type="button"
-      variant={reaction.viewerReacted ? "default" : "outline"}
+      variant="ghost"
       disabled={isToggling}
       aria-pressed={reaction.viewerReacted}
       onClick={() => void handleWaterPlant()}
-      size="icon"
+      size="xs"
       aria-label={reaction.viewerReacted ? "Remove water from plant" : "Water this plant"}
       title={reaction.viewerReacted ? "Plant watered" : "Water this plant"}
       className={cn(
-        "mx-auto size-9 rounded-full border-sky-300 transition-transform active:scale-95 dark:border-sky-800",
+        "h-7 rounded-full px-2 text-sky-700 transition-transform active:scale-95 dark:text-sky-300",
         reaction.viewerReacted
-          ? "bg-sky-600 text-white hover:bg-sky-600/90"
-          : "bg-background/70 text-sky-800 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950"
+          ? "bg-sky-100 hover:bg-sky-100 dark:bg-sky-950 dark:hover:bg-sky-950"
+          : "hover:bg-sky-50 dark:hover:bg-sky-950/60"
       )}
     >
       <DropIcon weight={reaction.viewerReacted ? "fill" : "bold"} />
+      <span className="min-w-2.5 text-xs tabular-nums">{reaction.count}</span>
     </Button>
   );
 };
@@ -299,7 +265,7 @@ export const GardenFlower = ({
             </p>
           </div>
         </div>
-        <div className="rounded-3xl border border-sky-200/70 bg-sky-50/60 p-3 dark:border-sky-900/60 dark:bg-sky-950/20">
+        <div className="flex items-center justify-end px-4">
           <PlantReaction postId={postId} isOpen={isOpen} />
         </div>
       </DialogContent>
