@@ -6,24 +6,37 @@ import { Field, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 
-import {
-  useAction,
-  useQuery,
-} from "convex/react";
+import { useAction } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { ArrowUpRightIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useState } from "react";
 import { Spinner } from "./ui/spinner";
 import { Sprout } from "lucide-react";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
 
-export const PostForm = () => {
+type EntryAvailability = {
+  today: string;
+  yesterday: string;
+  canPostToday: boolean;
+  canPostYesterday: boolean;
+};
+
+export const PostForm = ({
+  availability,
+}: {
+  availability: EntryAvailability;
+}) => {
   const timeZone = getBrowserTimeZone();
-  const hasPostedToday = useQuery(api.posts.hasPostedToday, { timeZone });
   const createPost = useAction(api.posts.create);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [entryDate, setEntryDate] = useState<string | null>(() =>
+    availability.canPostToday
+      ? availability.today
+      : availability.canPostYesterday
+        ? availability.yesterday
+        : null
+  );
 
   const form = useForm({
     defaultValues: {
@@ -35,12 +48,17 @@ export const PostForm = () => {
       }),
     },
     onSubmit: async ({ value }) => {
+      if (!entryDate) {
+        setError("Choose an available journal date");
+        return;
+      }
       setError(null);
       setIsSubmitting(true);
       try {
         await createPost({
           text: value.post,
           timeZone,
+          entryDate,
         });
         form.reset();
       } catch (err: any) {
@@ -51,7 +69,7 @@ export const PostForm = () => {
     },
   });
 
-  const isDisabled = hasPostedToday === true || isSubmitting;
+  const isDisabled = !entryDate || isSubmitting;
 
   return (
     <>
@@ -69,9 +87,28 @@ export const PostForm = () => {
         }}
       >
         <FieldGroup>
-          <form.Field
-            name="post"
-            children={(field) => {
+          <div className="grid grid-cols-2 gap-2" aria-label="Journal date">
+            <Button
+              type="button"
+              variant={entryDate === availability?.today ? "default" : "outline"}
+              disabled={!availability?.canPostToday || isSubmitting}
+              onClick={() => setEntryDate(availability?.today ?? null)}
+              className="rounded-full"
+            >
+              Today
+            </Button>
+            <Button
+              type="button"
+              variant={entryDate === availability?.yesterday ? "default" : "outline"}
+              disabled={!availability?.canPostYesterday || isSubmitting}
+              onClick={() => setEntryDate(availability?.yesterday ?? null)}
+              className="rounded-full"
+            >
+              Yesterday
+            </Button>
+          </div>
+          <form.Field name="post">
+            {(field) => {
               const isInvalid =
                 field.state.meta.isTouched && !field.state.meta.isValid;
               const charCount = field.state.value.length;
@@ -86,8 +123,8 @@ export const PostForm = () => {
                     onChange={(e) => field.handleChange(e.target.value)}
                     aria-invalid={isInvalid}
                     placeholder={
-                      isDisabled
-                        ? "You've already posted today"
+                      !entryDate
+                        ? "There is already a journal for both days"
                         : `Anything on your mind?`
                     }
                     autoComplete="off"
@@ -123,7 +160,7 @@ export const PostForm = () => {
                 </Field>
               );
             }}
-          />
+          </form.Field>
         </FieldGroup>
       </form>
     </>

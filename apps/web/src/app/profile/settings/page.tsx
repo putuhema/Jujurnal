@@ -11,6 +11,24 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BoardThemePicker } from "@/components/board-theme-picker";
+import { Switch } from "@/components/ui/switch";
+import {
+    isJournalReminderEnabled,
+    JOURNAL_REMINDER_CHANGED_EVENT,
+    setJournalReminderEnabled,
+} from "@/lib/journal-reminder";
+
+const subscribeToReminder = (callback: () => void) => {
+    window.addEventListener(JOURNAL_REMINDER_CHANGED_EVENT, callback);
+    return () => window.removeEventListener(JOURNAL_REMINDER_CHANGED_EVENT, callback);
+};
+
+const getReminderServerSnapshot = () => false;
+
+const getNotificationSupportSnapshot = () =>
+    "Notification" in window && "serviceWorker" in navigator;
+
+const subscribeToNotificationSupport = () => () => undefined;
 
 export default function Page() {
     const { data: session } = authClient.useSession();
@@ -18,11 +36,43 @@ export default function Page() {
 
     const [username, setUsername] = React.useState("");
     const [isSaving, setIsSaving] = React.useState(false);
+    const reminderEnabled = React.useSyncExternalStore(
+        subscribeToReminder,
+        isJournalReminderEnabled,
+        getReminderServerSnapshot
+    );
+    const notificationSupported = React.useSyncExternalStore(
+        subscribeToNotificationSupport,
+        getNotificationSupportSnapshot,
+        getReminderServerSnapshot
+    );
 
     React.useEffect(() => {
         const initial = session?.user?.name ?? "";
         setUsername(String(initial ?? ""));
     }, [session?.user?.name]);
+
+    const updateReminder = async (enabled: boolean) => {
+        if (!enabled) {
+            setJournalReminderEnabled(false);
+            return;
+        }
+
+        if (!notificationSupported) {
+            toast.error("This browser does not support journal notifications");
+            return;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+            toast.error("Allow notifications in your browser to enable the reminder");
+            return;
+        }
+
+        await navigator.serviceWorker.register("/journal-sw.js");
+        setJournalReminderEnabled(true);
+        toast.success("Your 8 PM journal reminder is on");
+    };
 
     return (
         <div className="max-w-xl space-y-8">
@@ -78,6 +128,20 @@ export default function Page() {
             </form>
             <div className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5">
                 <BoardThemePicker />
+            </div>
+            <div className="paper-card flex items-center justify-between gap-4 rounded-3xl border border-primary/10 bg-card/75 p-5">
+                <div className="space-y-1">
+                    <h2 className="font-medium">8 PM journal reminder</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Notify me at 8 PM when I haven’t written today’s journal.
+                    </p>
+                </div>
+                <Switch
+                    aria-label="8 PM journal reminder"
+                    checked={reminderEnabled}
+                    disabled={!notificationSupported}
+                    onCheckedChange={updateReminder}
+                />
             </div>
         </div>
     );

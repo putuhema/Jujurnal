@@ -64,6 +64,14 @@ export const AllGardensView = () => {
     return <GardensLoading />;
   }
 
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const monthlyResults = results.filter((post) => {
+    const date = getCalendarDate(post._creationTime, post.entryDate);
+    return date.year === currentYear && date.month === currentMonth;
+  });
+
   const gardensByUser = (() => {
     const gardens: Record<
       string,
@@ -73,7 +81,7 @@ export const AllGardensView = () => {
       }
     > = {};
 
-    for (const post of results) {
+    for (const post of monthlyResults) {
       if (!post.user) continue;
       const userId = post.user._id;
       if (!gardens[userId]) {
@@ -92,7 +100,7 @@ export const AllGardensView = () => {
     return gardens;
   })();
 
-  const totalFlowers = results.length;
+  const totalFlowers = monthlyResults.length;
 
   const gardenCount = Object.keys(gardensByUser).length;
 
@@ -107,27 +115,14 @@ export const AllGardensView = () => {
       {totalFlowers === 0 ? (
         <div className="paper-card rounded-3xl border border-dashed border-primary/25 bg-card/70 px-6 py-14 text-center text-muted-foreground">
           <div className="mb-3 text-4xl">🌱</div>
-          <p className="font-display text-2xl text-foreground">The first flower is waiting.</p>
-          <p className="mt-2">A few sentences are enough to begin.</p>
+          <p className="font-display text-2xl text-foreground">No flowers this month yet.</p>
+          <p className="mt-2">A few sentences are enough to plant one.</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {Object.entries(gardensByUser)
             .sort(([, a], [, b]) => b.posts.length - a.posts.length)
             .map(([userId, garden]) => {
-              const postsByYear = garden.posts.reduce(
-                (acc, post) => {
-                  const year = getCalendarDate(
-                    post._creationTime,
-                    post.entryDate
-                  ).year;
-                  if (!acc[year]) acc[year] = [];
-                  acc[year].push(post);
-                  return acc;
-                },
-                {} as Record<number, typeof garden.posts>
-              );
-
               return (
                 <div key={userId} className="board-tint paper-card overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5">
                   <div className="mb-4 flex items-center justify-between border-b border-dashed border-primary/20 pb-4">
@@ -141,13 +136,7 @@ export const AllGardensView = () => {
                       {garden.posts.length}
                     </Badge>
                   </div>
-                  {Object.entries(postsByYear)
-                    .sort(([a], [b]) => Number(b) - Number(a))
-                    .map(([year, posts]) => (
-                      <div key={year}>
-                        <IslandGarden posts={posts} size="xs" />
-                      </div>
-                    ))}
+                  <IslandGarden posts={garden.posts} size="xs" />
                 </div>
               );
             })}

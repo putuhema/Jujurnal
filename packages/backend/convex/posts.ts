@@ -117,6 +117,19 @@ export const createInternal = internalMutation({
     tagIds: v.optional(v.array(v.id("tags"))),
   },
   handler: async (ctx, args) => {
+    const existingPosts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
+      .collect();
+    const alreadyExists = existingPosts.some(
+      (post) =>
+        (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
+        args.entryDate
+    );
+    if (alreadyExists) {
+      throw new Error("A journal already exists for that day");
+    }
+
     const flowerId =
       Number.isFinite(args.flowerId) && args.flowerId > 0
         ? Math.floor(args.flowerId)
@@ -132,10 +145,10 @@ export const createInternal = internalMutation({
       year: args.year,
     });
 
-    const posts = await ctx.db
-      .query("posts")
-      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
-      .collect();
+    const posts = [...existingPosts, {
+      entryDate: args.entryDate,
+      _creationTime: args.nowMs,
+    }];
 
     const postsByDate = new Set<string>();
     for (const post of posts) {
@@ -203,10 +216,48 @@ export const hasPostedToday = query({
   },
 });
 
+export const getEntryAvailability = query({
+  args: { timeZone: v.string() },
+  handler: async (ctx, args) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
+    const nowMs = Date.now();
+    const today = getDateString(nowMs, args.timeZone);
+    const yesterday = getDateStringForDay(nowMs, 1, args.timeZone);
+
+    if (!currentUser) {
+      return {
+        today,
+        yesterday,
+        canPostToday: false,
+        canPostYesterday: false,
+      };
+    }
+
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
+      .collect();
+    const postedDates = new Set(
+      posts.map(
+        (post) =>
+          post.entryDate ?? getDateString(post._creationTime, args.timeZone)
+      )
+    );
+
+    return {
+      today,
+      yesterday,
+      canPostToday: !postedDates.has(today),
+      canPostYesterday: !postedDates.has(yesterday),
+    };
+  },
+});
+
 export const create = action({
   args: {
     text: v.string(),
     timeZone: v.string(),
+    entryDate: v.string(),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -217,7 +268,17 @@ export const create = action({
 
     const nowMs = Date.now();
     const today = getDateString(nowMs, args.timeZone);
-    const year = Number(today.slice(0, 4));
+    const yesterday = getDateStringForDay(nowMs, 1, args.timeZone);
+    if (args.entryDate !== today && args.entryDate !== yesterday) {
+      throw new Error("A journal can only be created for today or yesterday");
+    }
+
+    const text = args.text.trim();
+    if (text.length < 12 || text.length > 280) {
+      throw new Error("An entry must be between 12 and 280 characters");
+    }
+
+    const year = Number(args.entryDate.slice(0, 4));
     const existingPosts = await ctx.runQuery(
       internal.posts.getUserPostsInternal,
       {
@@ -225,25 +286,25 @@ export const create = action({
       }
     );
 
-    const hasPostedToday = existingPosts.some(
+    const hasPostedForDate = existingPosts.some(
       (post) =>
         (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
-        today
+        args.entryDate
     );
 
-    if (hasPostedToday) {
-      throw new Error("You can only post once per day");
+    if (hasPostedForDate) {
+      throw new Error("A journal already exists for that day");
     }
-    const moodAnalysis = await analyzeMood(args.text);
+    const moodAnalysis = await analyzeMood(text);
 
     const flowerId = Math.floor(Math.random() * FLOWER_COUNT) + 1;
 
     await ctx.runMutation(internal.posts.createInternal, {
-      text: args.text,
+      text,
       userId: currentUser._id,
       nowMs,
       timeZone: args.timeZone,
-      entryDate: today,
+      entryDate: args.entryDate,
       year,
       flowerId,
       mood: moodAnalysis.grade,

@@ -19,14 +19,19 @@ export const PostDialog = ({
   mobileNav?: boolean;
 }) => {
   const timeZone = getBrowserTimeZone();
-  const hasPostedToday = useQuery(api.posts.hasPostedToday, { timeZone });
+  const availability = useQuery(api.posts.getEntryAvailability, { timeZone });
   const floatingClass = floating && "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-40 h-11 -translate-x-1/2 px-5 shadow-[0_12px_28px_oklch(0.24_0.04_70/25%)] sm:static sm:h-8 sm:translate-x-0 sm:px-3 sm:shadow-none";
-  if (hasPostedToday) {
+  const hasNoAvailableDate =
+    availability !== undefined &&
+    !availability.canPostToday &&
+    !availability.canPostYesterday;
+
+  if (hasNoAvailableDate) {
     if (mobileNav) {
       return (
         <div
           className="-mt-7 flex min-w-0 flex-col items-center gap-1 text-[10px] font-medium text-primary"
-          title="Today’s flower is already planted"
+          title="Today and yesterday are already planted"
         >
           <span className="flex size-13 items-center justify-center rounded-full border-[3px] border-card bg-secondary text-primary shadow-[0_7px_20px_oklch(0.2_0.03_70/18%)]">
             <PlantIcon weight="fill" className="size-5" />
@@ -37,9 +42,9 @@ export const PostDialog = ({
     }
 
     return (
-      <div className={cn("flex h-8 items-center gap-1.5 rounded-full border border-primary/15 bg-secondary/50 px-3 text-xs font-medium text-secondary-foreground", floatingClass)} title="Today’s flower is already planted">
+      <div className={cn("flex h-8 items-center gap-1.5 rounded-full border border-primary/15 bg-secondary/50 px-3 text-xs font-medium text-secondary-foreground", floatingClass)} title="Today and yesterday are already planted">
         <PlantIcon weight="fill" className="text-primary" />
-        <span className="hidden sm:inline">Today’s flower is planted</span>
+        <span className="hidden sm:inline">Journals are planted</span>
         <span className="sm:hidden">Planted</span>
       </div>
     );
@@ -48,7 +53,7 @@ export const PostDialog = ({
   return (
     <Dialog>
       <DialogTrigger
-        aria-label={mobileNav ? "Create today’s post" : undefined}
+        aria-label={mobileNav ? "Create journal" : undefined}
         className={mobileNav
           ? "group -mt-7 flex min-w-0 flex-col items-center gap-1 text-[10px] font-semibold text-primary focus-visible:outline-none"
           : buttonVariants({ variant: "default", size, className: cn("rounded-full shadow-sm", floatingClass) })}
@@ -63,17 +68,22 @@ export const PostDialog = ({
         ) : (
           <>
             {size === "lg" ? <SparkleIcon weight="fill" /> : <PlantIcon />}
-            Write today
+            Write journal
           </>
         )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader className="px-6 pt-6">
-          <DialogTitle className="font-display text-2xl tracking-[-0.035em]">A plan for today</DialogTitle>
+          <DialogTitle className="font-display text-2xl tracking-[-0.035em]">Plant a journal</DialogTitle>
           <DialogDescription>There’s no right way to begin. Just be honest.</DialogDescription>
         </DialogHeader>
         <div className="px-6 pb-6">
-          <PostForm />
+          {availability ? (
+            <PostForm
+              key={`${availability.today}-${availability.canPostToday}-${availability.canPostYesterday}`}
+              availability={availability}
+            />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
