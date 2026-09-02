@@ -17,6 +17,8 @@ import {
   TrashSimpleIcon,
   DotsThreeCircleIcon,
   PencilSimpleIcon,
+  GlobeHemisphereWestIcon,
+  LockKeyIcon,
 } from "@phosphor-icons/react";
 import {
   DropdownMenu,
@@ -72,6 +74,7 @@ export default function UserPost() {
   const [search, setSearch] = useState("");
   const [editingPost, setEditingPost] = useState<any>(null);
   const [editedBody, setEditedBody] = useState("");
+  const [editedVisibility, setEditedVisibility] = useState<"public" | "private">("public");
   const [isSaving, setIsSaving] = useState(false);
   const filteredPosts = (() => {
     if (!posts) return [];
@@ -82,13 +85,18 @@ export default function UserPost() {
   const beginEditing = (post: any) => {
     setEditingPost(post);
     setEditedBody(post.body);
+    setEditedVisibility(post.visibility ?? "public");
   };
 
   const saveEdit = async () => {
     if (!editingPost) return;
     setIsSaving(true);
     try {
-      await updatePost({ id: editingPost._id, body: editedBody });
+      await updatePost({
+        id: editingPost._id,
+        body: editedBody,
+        visibility: editedVisibility,
+      });
       setEditingPost(null);
       toast.success("Entry updated");
     } catch (error) {
@@ -160,6 +168,18 @@ export default function UserPost() {
                     {moodLabels[post.mood as MoodGrade]}
                   </span>
                 )}
+                <span
+                  className="inline-flex size-6 items-center justify-center rounded-full border border-border/60 bg-background/65 text-muted-foreground"
+                  role="img"
+                  aria-label={post.visibility === "private" ? "Private journal" : "Public journal"}
+                  title={post.visibility === "private" ? "Private journal" : "Public journal"}
+                >
+                  {post.visibility === "private" ? (
+                    <LockKeyIcon className="size-3.5" weight="fill" />
+                  ) : (
+                    <GlobeHemisphereWestIcon className="size-3.5" weight="bold" />
+                  )}
+                </span>
               </div>
               <div className="space-y-2">
                 <p>{post.body}</p>
@@ -208,6 +228,34 @@ export default function UserPost() {
               void saveEdit();
             }}
           >
+            <div
+              className="grid grid-cols-2 gap-2"
+              role="group"
+              aria-label="Journal visibility"
+            >
+              <Button
+                type="button"
+                variant={editedVisibility === "public" ? "default" : "outline"}
+                className="rounded-full"
+                disabled={isSaving}
+                aria-pressed={editedVisibility === "public"}
+                onClick={() => setEditedVisibility("public")}
+              >
+                <GlobeHemisphereWestIcon weight="bold" />
+                Public
+              </Button>
+              <Button
+                type="button"
+                variant={editedVisibility === "private" ? "default" : "outline"}
+                className="rounded-full"
+                disabled={isSaving}
+                aria-pressed={editedVisibility === "private"}
+                onClick={() => setEditedVisibility("private")}
+              >
+                <LockKeyIcon weight="bold" />
+                Private
+              </Button>
+            </div>
             <Textarea value={editedBody} onChange={(event) => setEditedBody(event.target.value)} maxLength={280} className="min-h-36" aria-label="Edit entry" />
             <div className="flex items-center justify-between"><span className="text-xs text-muted-foreground">{editedBody.length}/280</span><Button type="submit" disabled={isSaving || editedBody.trim().length < 12}>{isSaving ? "Saving…" : "Save words"}</Button></div>
           </form>

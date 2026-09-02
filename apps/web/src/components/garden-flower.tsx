@@ -1,14 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
+import { DropIcon, LockKeyIcon } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { api } from "@puma-brain/backend/convex/_generated/api";
+import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 
 const flowerSvgCache = new Map<string, Promise<string>>();
 
@@ -66,30 +75,131 @@ const moodLabels: Record<MoodGrade, string> = {
 interface GardenFlowerProps {
   flowerId?: number;
   mood: MoodGrade;
-  postId?: string;
+  postId: Id<"posts">;
   text: string;
+  visibility: "public" | "private";
+  reactionCount: number;
   size?: "xs" | "sm" | "md" | "lg";
   createdAt: Date
 }
 
+type ReactionStatus = {
+  count: number;
+  viewerReacted: boolean;
+  canReact: boolean;
+  unavailableReason: "signedOut" | "owner" | "private" | null;
+};
+
+const sizeClasses = {
+  xs: "size-10",
+  sm: "size-11",
+  md: "size-16",
+  lg: "size-20",
+};
+
+const getUnavailableMessage = (reaction: ReactionStatus) => {
+  const people = `${reaction.count} ${reaction.count === 1 ? "person has" : "people have"}`;
+
+  if (reaction.unavailableReason === "owner") {
+    return reaction.count === 0
+      ? "Your plant is waiting for a little water."
+      : `${people} watered your plant.`;
+  }
+  if (reaction.unavailableReason === "signedOut") {
+    return reaction.count === 0
+      ? "Sign in to water this plant."
+      : `${people} watered this plant. Sign in to join them.`;
+  }
+  return "Private plants cannot be watered.";
+};
+
+const PlantReaction = ({
+  postId,
+  isOpen,
+}: {
+  postId: Id<"posts">;
+  isOpen: boolean;
+}) => {
+  const [isToggling, setIsToggling] = useState(false);
+  const reaction = useQuery(
+    api.reactions.getForPost,
+    isOpen ? { postId } : "skip"
+  );
+  const toggleReaction = useMutation(api.reactions.toggle).withOptimisticUpdate(
+    (store) => {
+      const current = store.getQuery(api.reactions.getForPost, { postId });
+      if (!current?.canReact) return;
+
+      store.setQuery(api.reactions.getForPost, { postId }, {
+        ...current,
+        count: Math.max(0, current.count + (current.viewerReacted ? -1 : 1)),
+        viewerReacted: !current.viewerReacted,
+      });
+    }
+  );
+
+  const handleWaterPlant = async () => {
+    setIsToggling(true);
+    try {
+      await toggleReaction({ postId });
+    } catch {
+      toast.error("Could not water this plant");
+    }
+    setIsToggling(false);
+  };
+
+  if (reaction === undefined) {
+    return <div className="h-9 animate-pulse rounded-full bg-sky-200/45 dark:bg-sky-900/35" />;
+  }
+  if (reaction === null) return null;
+
+  if (!reaction.canReact) {
+    return (
+      <div className="flex min-h-9 items-center justify-center gap-2 px-3 text-center text-xs text-sky-800/80 dark:text-sky-200/75">
+        <DropIcon weight="fill" />
+        {getUnavailableMessage(reaction)}
+      </div>
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      variant={reaction.viewerReacted ? "default" : "outline"}
+      disabled={isToggling}
+      aria-pressed={reaction.viewerReacted}
+      onClick={() => void handleWaterPlant()}
+      size="icon"
+      aria-label={reaction.viewerReacted ? "Remove water from plant" : "Water this plant"}
+      title={reaction.viewerReacted ? "Plant watered" : "Water this plant"}
+      className={cn(
+        "mx-auto size-9 rounded-full border-sky-300 transition-transform active:scale-95 dark:border-sky-800",
+        reaction.viewerReacted
+          ? "bg-sky-600 text-white hover:bg-sky-600/90"
+          : "bg-background/70 text-sky-800 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-950"
+      )}
+    >
+      <DropIcon weight={reaction.viewerReacted ? "fill" : "bold"} />
+    </Button>
+  );
+};
+
 export const GardenFlower = ({
   flowerId,
   mood,
+  postId,
   text,
+  visibility,
+  reactionCount,
   size = "md",
   createdAt,
 }: GardenFlowerProps) => {
   const color = moodToColor[mood];
   const safeFlowerId = flowerId && flowerId > 0 ? flowerId : 1;
-
-  const sizeClasses = {
-    xs: "size-10",
-    sm: "size-11",
-    md: "size-16",
-    lg: "size-20",
-  };
+  const isPrivate = visibility === "private";
 
   const [flowerSvg, setFlowerSvg] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -117,20 +227,54 @@ export const GardenFlower = ({
     );
   }
 
-  return (
-    <Dialog>
-      <DialogTrigger>
-        <div
-          className={cn("garden-plant island-flower relative z-10 flex cursor-pointer items-center justify-center", sizeClasses[size])}
-          title={`Feeling: ${moodLabels[mood]}`}
+  const flower = (
+    <div
+      className={cn(
+        "garden-plant island-flower relative z-10 flex items-center justify-center",
+        isPrivate ? "cursor-default" : "cursor-pointer",
+        sizeClasses[size]
+      )}
+      title={isPrivate ? "Private journal" : `Feeling: ${moodLabels[mood]}`}
+    >
+      <div
+        className="size-full"
+        dangerouslySetInnerHTML={{ __html: flowerSvg }}
+      />
+      {isPrivate ? (
+        <span
+          className="absolute -right-1 -top-1 z-20 inline-flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
+          role="img"
+          aria-label="Private journal"
         >
-          <div
-            className="w-full h-full"
-            dangerouslySetInnerHTML={{ __html: flowerSvg }}
-          />
-        </div>
+          <LockKeyIcon className="size-3" weight="fill" />
+        </span>
+      ) : reactionCount > 0 ? (
+        <span
+          className="absolute -right-1 -top-1 z-20 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-sky-300 bg-sky-100 px-1 text-[10px] font-bold tabular-nums text-sky-800 shadow-sm dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200"
+          role="img"
+          aria-label={`${reactionCount} ${reactionCount === 1 ? "watering" : "waterings"}`}
+        >
+          <DropIcon className="size-2.5" weight="fill" />
+          {reactionCount}
+        </span>
+      ) : null}
+    </div>
+  );
+
+  if (isPrivate) return flower;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger aria-label={`Open ${moodLabels[mood]} journal`}>
+        {flower}
       </DialogTrigger>
       <DialogContent>
+        <DialogHeader className="sr-only">
+          <DialogTitle>Journal plant</DialogTitle>
+          <DialogDescription>
+            Read this journal entry and send a little encouragement.
+          </DialogDescription>
+        </DialogHeader>
         <div className="grid grid-cols-3 gap-4 px-4">
           <div className="place-self-center relative">
             <div
@@ -146,14 +290,17 @@ export const GardenFlower = ({
               <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>
             </div>
           </div>
-          <div className="col-span-2">
-            {text}
-            <p className="text-xs text-muted-foreground">
+          <div className="col-span-2 flex min-w-0 flex-col justify-center">
+            <p className="leading-relaxed">{text}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
               {formatDistanceToNow(new Date(createdAt), {
                 addSuffix: true,
               })}
             </p>
           </div>
+        </div>
+        <div className="rounded-3xl border border-sky-200/70 bg-sky-50/60 p-3 dark:border-sky-900/60 dark:bg-sky-950/20">
+          <PlantReaction postId={postId} isOpen={isOpen} />
         </div>
       </DialogContent>
     </Dialog>

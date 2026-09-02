@@ -17,6 +17,7 @@ const FLOWER_COUNT = 212;
 export const getAll = query({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
     const posts = await ctx.db
       .query("posts")
       .order("desc")
@@ -28,7 +29,12 @@ export const getAll = query({
       ReturnType<ReturnType<typeof ctx.db.query<"gardenPreferences">>["unique"]>
     >();
     const page = await Promise.all(
-      (posts.page ?? []).map(async (post) => {
+      (posts.page ?? [])
+        .filter(
+          (post) =>
+            post.visibility !== "private" || post.userId === currentUser?._id
+        )
+        .map(async (post) => {
         let userPromise = userPromises.get(post.userId);
         if (!userPromise) {
           userPromise = authComponent.getAnyUserById(ctx, post.userId);
@@ -44,8 +50,21 @@ export const getAll = query({
           themePromises.set(post.userId, themePromise);
         }
 
-        const [user, preference] = await Promise.all([userPromise, themePromise]);
-        return { ...post, user, gardenTheme: preference?.theme ?? "ivory" };
+        const reactionsPromise = ctx.db
+          .query("plantReactions")
+          .withIndex("by_postId", (q) => q.eq("postId", post._id))
+          .collect();
+        const [user, preference, reactions] = await Promise.all([
+          userPromise,
+          themePromise,
+          reactionsPromise,
+        ]);
+        return {
+          ...post,
+          user,
+          gardenTheme: preference?.theme ?? "ivory",
+          reactionCount: reactions.length,
+        };
       })
     );
 
@@ -63,6 +82,10 @@ export const getById = query({
     if (!post) {
       return null;
     }
+    if (post.visibility === "private") {
+      const currentUser = await authComponent.safeGetAuthUser(ctx);
+      if (post.userId !== currentUser?._id) return null;
+    }
     const user = await authComponent.getAnyUserById(ctx, post.userId);
     return { ...post, user };
   },
@@ -71,6 +94,7 @@ export const getById = query({
 export const getByUserId = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
     const posts = await ctx.db
       .query("posts")
       .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
@@ -78,7 +102,20 @@ export const getByUserId = query({
       .collect();
 
     const user = await authComponent.getAnyUserById(ctx, args.userId);
-    return posts.map((post) => ({ ...post, user }));
+    return await Promise.all(
+      posts
+        .filter(
+          (post) =>
+            post.visibility !== "private" || post.userId === currentUser?._id
+        )
+        .map(async (post) => {
+          const reactions = await ctx.db
+            .query("plantReactions")
+            .withIndex("by_postId", (q) => q.eq("postId", post._id))
+            .collect();
+          return { ...post, user, reactionCount: reactions.length };
+        })
+    );
   },
 });
 
@@ -118,6 +155,7 @@ export const createInternal = internalMutation({
     entryDate: v.string(),
     year: v.number(),
     flowerId: v.number(),
+    visibility: v.union(v.literal("public"), v.literal("private")),
     mood: v.union(
       v.literal("A+"),
       v.literal("A"),
@@ -163,6 +201,7 @@ export const createInternal = internalMutation({
       flowerId: ((flowerId - 1) % FLOWER_COUNT) + 1,
       entryDate: args.entryDate,
       year: args.year,
+      visibility: args.visibility,
     });
 
     const posts = [...existingPosts, {
@@ -278,6 +317,7 @@ export const create = action({
     text: v.string(),
     timeZone: v.string(),
     entryDate: v.string(),
+    visibility: v.union(v.literal("public"), v.literal("private")),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -327,6 +367,7 @@ export const create = action({
       entryDate: args.entryDate,
       year,
       flowerId,
+      visibility: args.visibility,
       mood: moodAnalysis.grade,
     });
   },
@@ -337,6 +378,18 @@ export const deletePost = mutation({
     id: v.id("posts"),
   },
   handler: async (ctx, args) => {
+    const currentUser = await authComponent.getAuthUser(ctx);
+    const post = await ctx.db.get(args.id);
+    if (!post) throw new Error("Entry not found");
+    if (post.userId !== currentUser._id) {
+      throw new Error("You can only delete your own entries");
+    }
+
+    const reactions = await ctx.db
+      .query("plantReactions")
+      .withIndex("by_postId", (q) => q.eq("postId", args.id))
+      .collect();
+    await Promise.all(reactions.map((reaction) => ctx.db.delete(reaction._id)));
     await ctx.db.delete("posts", args.id);
     return { success: true };
   },
@@ -347,6 +400,7 @@ export const updatePostInternal = internalMutation({
     id: v.id("posts"),
     body: v.string(),
     userId: v.string(),
+    visibility: v.union(v.literal("public"), v.literal("private")),
     mood: v.union(
       v.literal("A+"),
       v.literal("A"),
@@ -370,7 +424,19 @@ export const updatePostInternal = internalMutation({
       throw new Error("You can only edit your own entries");
     }
 
-    await ctx.db.patch(args.id, { body: args.body, mood: args.mood });
+    await ctx.db.patch(args.id, {
+      body: args.body,
+      mood: args.mood,
+      visibility: args.visibility,
+    });
+
+    if (args.visibility === "private") {
+      const reactions = await ctx.db
+        .query("plantReactions")
+        .withIndex("by_postId", (q) => q.eq("postId", args.id))
+        .collect();
+      await Promise.all(reactions.map((reaction) => ctx.db.delete(reaction._id)));
+    }
   },
 });
 
@@ -378,6 +444,7 @@ export const updatePost = action({
   args: {
     id: v.id("posts"),
     body: v.string(),
+    visibility: v.union(v.literal("public"), v.literal("private")),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -402,6 +469,7 @@ export const updatePost = action({
       id: args.id,
       body,
       userId: currentUser._id,
+      visibility: args.visibility,
       mood: moodAnalysis.grade,
     });
   },

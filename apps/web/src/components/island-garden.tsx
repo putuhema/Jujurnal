@@ -1,11 +1,14 @@
 import { GardenFlower } from "./garden-flower";
+import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 
 type IslandPost = {
-  _id: string;
+  _id: Id<"posts">;
   _creationTime: number;
   body: string;
   flowerId?: number;
   mood: Parameters<typeof GardenFlower>[0]["mood"];
+  visibility?: "public" | "private";
+  reactionCount?: number;
 };
 
 const flowerPositions = [
@@ -41,6 +44,8 @@ export const IslandGarden = ({
             mood={post.mood}
             text={post.body}
             postId={post._id}
+            visibility={post.visibility ?? "public"}
+            reactionCount={post.reactionCount ?? 0}
             size={size}
             createdAt={new Date(post._creationTime)}
           />

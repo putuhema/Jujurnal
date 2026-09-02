@@ -11,6 +11,7 @@ import { api } from "@puma-brain/backend/convex/_generated/api";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useState } from "react";
 import { Spinner } from "./ui/spinner";
+import { GlobeHemisphereWestIcon, LockKeyIcon } from "@phosphor-icons/react";
 import { Sprout } from "lucide-react";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
 
@@ -30,6 +31,7 @@ export const PostForm = ({
   const createPost = useAction(api.posts.create);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [visibility, setVisibility] = useState<"public" | "private">("public");
   const [entryDate, setEntryDate] = useState<string | null>(() =>
     availability.canPostToday
       ? availability.today
@@ -59,13 +61,13 @@ export const PostForm = ({
           text: value.post,
           timeZone,
           entryDate,
+          visibility,
         });
         form.reset();
       } catch (err: any) {
         setError(err.message || "Failed to create post");
-      } finally {
-        setIsSubmitting(false);
       }
+      setIsSubmitting(false);
     },
   });
 
@@ -105,6 +107,34 @@ export const PostForm = ({
               className="rounded-full"
             >
               Yesterday
+            </Button>
+          </div>
+          <div
+            className="grid grid-cols-2 gap-2"
+            role="group"
+            aria-label="Journal visibility"
+          >
+            <Button
+              type="button"
+              variant={visibility === "public" ? "default" : "outline"}
+              disabled={isSubmitting}
+              onClick={() => setVisibility("public")}
+              className="rounded-full"
+              aria-pressed={visibility === "public"}
+            >
+              <GlobeHemisphereWestIcon weight="bold" />
+              Public
+            </Button>
+            <Button
+              type="button"
+              variant={visibility === "private" ? "default" : "outline"}
+              disabled={isSubmitting}
+              onClick={() => setVisibility("private")}
+              className="rounded-full"
+              aria-pressed={visibility === "private"}
+            >
+              <LockKeyIcon weight="bold" />
+              Private
             </Button>
           </div>
           <form.Field name="post">

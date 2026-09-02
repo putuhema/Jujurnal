@@ -17,6 +17,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   TrashSimpleIcon,
   DotsThreeCircleIcon,
+  GlobeHemisphereWestIcon,
+  LockKeyIcon,
 } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 import {
@@ -71,11 +73,10 @@ export const Posts = () => {
     <div className="space-y-2">
       {results &&
         results.map((post: any) => {
-          const PostItem = ({ post }: { post: any }) => {
-            const displayText = post.body;
+          const displayText = post.body;
 
-            return (
-              <Item variant="outline" className="border-none">
+          return (
+              <Item key={post._id} variant="outline" className="border-none">
                 <ItemMedia>
                   <Avatar className="size-10">
                     <AvatarImage src={post.user.image} />
@@ -100,6 +101,18 @@ export const Posts = () => {
                         {moodLabels[post.mood as MoodGrade]}
                       </span>
                     )}
+                    <span
+                      className="inline-flex size-6 items-center justify-center rounded-full border border-border/60 bg-background/65 text-muted-foreground"
+                      role="img"
+                      aria-label={post.visibility === "private" ? "Private journal" : "Public journal"}
+                      title={post.visibility === "private" ? "Private journal" : "Public journal"}
+                    >
+                      {post.visibility === "private" ? (
+                        <LockKeyIcon className="size-3.5" weight="fill" />
+                      ) : (
+                        <GlobeHemisphereWestIcon className="size-3.5" weight="bold" />
+                      )}
+                    </span>
                   </div>
                   <div className="space-y-2">
                     <p>{displayText}</p>
@@ -128,10 +141,7 @@ export const Posts = () => {
                   )}
                 </ItemActions>
               </Item>
-            );
-          };
-
-          return <PostItem key={post._id} post={post} />;
+          );
         })}
       {status === "CanLoadMore" && (
         <Button

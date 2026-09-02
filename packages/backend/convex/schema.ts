@@ -33,8 +33,17 @@ export default defineSchema({
     moodReason: v.optional(v.string()),
     flowerId: v.optional(v.number()),
     entryDate: v.optional(v.string()),
+    visibility: v.optional(
+      v.union(v.literal("public"), v.literal("private"))
+    ),
     year: v.number(),
   })
     .index("by_authorId", ["userId"])
     .index("by_year", ["year"]),
+  plantReactions: defineTable({
+    postId: v.id("posts"),
+    userId: v.string(),
+  })
+    .index("by_postId", ["postId"])
+    .index("by_postId_userId", ["postId", "userId"]),
 });

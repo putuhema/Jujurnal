@@ -3,7 +3,7 @@
 import { usePaginatedQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { IslandGarden } from "./island-garden";
-import { BookOpenTextIcon, PlantIcon } from "@phosphor-icons/react";
+import { PlantIcon } from "@phosphor-icons/react";
 import { Badge } from "./ui/badge";
 import { getCalendarDate } from "@/lib/calendar-date";
 import { Skeleton } from "./ui/skeleton";
@@ -44,10 +44,6 @@ const GardensLoading = () => (
     aria-live="polite"
     aria-label="Loading gardens"
   >
-    <div className="mb-6 flex gap-2">
-      <Skeleton className="h-8 w-24 rounded-full bg-primary/10" />
-      <Skeleton className="h-8 w-28 rounded-full bg-primary/10" />
-    </div>
     <div className="grid gap-4 md:grid-cols-2">
       <GardenLoadingCard />
       <GardenLoadingCard />
@@ -109,16 +105,8 @@ export const AllGardensView = () => {
 
   const totalFlowers = monthlyResults.length;
 
-  const gardenCount = Object.keys(gardensByUser).length;
-
   return (
   <div className="py-8 sm:py-12">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex gap-2">
-          <Badge variant="secondary" className="rounded-full px-3 py-1.5"><PlantIcon weight="fill" /> {totalFlowers} {totalFlowers === 1 ? "flower" : "flowers"}</Badge>
-          <Badge variant="secondary" className="rounded-full px-3 py-1.5"><BookOpenTextIcon weight="fill" /> {gardenCount} {gardenCount === 1 ? "journal" : "journals"}</Badge>
-        </div>
-      </div>
       {totalFlowers === 0 ? (
         <div className="paper-card rounded-3xl border border-dashed border-primary/25 bg-card/70 px-6 py-14 text-center text-muted-foreground">
           <div className="mb-3 text-4xl">🌱</div>
