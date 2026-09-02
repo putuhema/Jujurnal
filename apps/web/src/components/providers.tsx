@@ -8,7 +8,6 @@ import { authClient } from "@/lib/auth-client";
 
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
-import { JournalReminder } from "./journal-reminder";
 
 const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
 
@@ -31,7 +30,6 @@ export default function Providers({
           authClient={authClient}
           initialToken={initialToken}
         >
-          <JournalReminder />
           {children}
         </ConvexBetterAuthProvider>
         <Toaster richColors />

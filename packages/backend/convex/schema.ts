@@ -46,4 +46,23 @@ export default defineSchema({
   })
     .index("by_postId", ["postId"])
     .index("by_postId_userId", ["postId", "userId"]),
+  reminderSettings: defineTable({
+    userId: v.string(),
+    enabled: v.boolean(),
+    days: v.array(v.number()),
+    time: v.string(),
+    timeZone: v.string(),
+    lastSentDate: v.optional(v.string()),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_enabled", ["enabled"]),
+  pushSubscriptions: defineTable({
+    userId: v.string(),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_endpoint", ["endpoint"]),
 });

@@ -10,6 +10,7 @@
 
 import type * as analysis from "../analysis.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
@@ -17,6 +18,9 @@ import type * as mood from "../mood.js";
 import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
 import type * as reactions from "../reactions.js";
+import type * as reminderDelivery from "../reminderDelivery.js";
+import type * as reminderSchedule from "../reminderSchedule.js";
+import type * as reminders from "../reminders.js";
 import type * as streak from "../streak.js";
 import type * as types from "../types.js";
 
@@ -29,6 +33,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   analysis: typeof analysis;
   auth: typeof auth;
+  crons: typeof crons;
   healthCheck: typeof healthCheck;
   helpers: typeof helpers;
   http: typeof http;
@@ -36,6 +41,9 @@ declare const fullApi: ApiFromModules<{
   posts: typeof posts;
   preferences: typeof preferences;
   reactions: typeof reactions;
+  reminderDelivery: typeof reminderDelivery;
+  reminderSchedule: typeof reminderSchedule;
+  reminders: typeof reminders;
   streak: typeof streak;
   types: typeof types;
 }>;
