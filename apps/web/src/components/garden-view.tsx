@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { getCalendarDate } from "@/lib/calendar-date";
+import { gardenThemeColors } from "@/lib/garden-theme";
 
 const monthNames = [
   "January", "February", "March", "April", "May", "June",
@@ -31,6 +32,10 @@ export const GardenView = () => {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
   const userPosts = useQuery(api.posts.getByUserId, userId ? { userId } : "skip");
+  const gardenTheme = useQuery(
+    api.preferences.getGardenTheme,
+    userId ? { userId } : "skip"
+  );
 
   const sortedPosts = [...(userPosts ?? [])].sort((a, b) => a._creationTime - b._creationTime);
   const years = new Set(
@@ -47,7 +52,7 @@ export const GardenView = () => {
 
   if (!userId) return null;
 
-  if (userPosts === undefined) {
+  if (userPosts === undefined || gardenTheme === undefined) {
     return (
       <div className="paper-card space-y-5 rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
         <div className="flex justify-between gap-4"><Skeleton className="h-14 w-52" /><Skeleton className="h-9 w-40" /></div>
@@ -59,7 +64,10 @@ export const GardenView = () => {
   const periodLabel = view === "month" ? `${monthNames[selectedMonth]} ${selectedYear}` : selectedYear.toString();
 
   return (
-    <section className="board-tint paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
+    <section
+      className="board-tint paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7"
+      style={{ "--board-color": gardenThemeColors[gardenTheme] } as CSSProperties}
+    >
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="board-eyebrow text-xs font-bold uppercase tracking-[0.16em]">Your garden · {periodLabel}</p>

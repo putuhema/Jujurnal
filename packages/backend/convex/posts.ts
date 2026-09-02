@@ -22,10 +22,30 @@ export const getAll = query({
       .order("desc")
       .paginate(args.paginationOpts);
 
+    const userPromises = new Map<string, ReturnType<typeof authComponent.getAnyUserById>>();
+    const themePromises = new Map<
+      string,
+      ReturnType<ReturnType<typeof ctx.db.query<"gardenPreferences">>["unique"]>
+    >();
     const page = await Promise.all(
       (posts.page ?? []).map(async (post) => {
-        const user = await authComponent.getAnyUserById(ctx, post.userId);
-        return { ...post, user };
+        let userPromise = userPromises.get(post.userId);
+        if (!userPromise) {
+          userPromise = authComponent.getAnyUserById(ctx, post.userId);
+          userPromises.set(post.userId, userPromise);
+        }
+
+        let themePromise = themePromises.get(post.userId);
+        if (!themePromise) {
+          themePromise = ctx.db
+            .query("gardenPreferences")
+            .withIndex("by_userId", (q) => q.eq("userId", post.userId))
+            .unique();
+          themePromises.set(post.userId, themePromise);
+        }
+
+        const [user, preference] = await Promise.all([userPromise, themePromise]);
+        return { ...post, user, gardenTheme: preference?.theme ?? "ivory" };
       })
     );
 

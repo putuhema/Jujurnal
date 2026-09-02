@@ -15,6 +15,7 @@ import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as mood from "../mood.js";
 import type * as posts from "../posts.js";
+import type * as preferences from "../preferences.js";
 import type * as streak from "../streak.js";
 import type * as types from "../types.js";
 
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   mood: typeof mood;
   posts: typeof posts;
+  preferences: typeof preferences;
   streak: typeof streak;
   types: typeof types;
 }>;

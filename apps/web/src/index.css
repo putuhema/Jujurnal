@@ -160,6 +160,16 @@
   .board-tint .board-title { color: var(--board-ink); }
   .board-tint .board-eyebrow { color: color-mix(in oklab, var(--board-color) 72%, oklch(0.31 0.06 60)); }
   .board-tint .board-copy { color: var(--board-copy); }
+  .profile-banner {
+    background:
+      radial-gradient(circle at 16% 125%, oklch(1 0 0 / 32%) 0 18%, transparent 45%),
+      linear-gradient(112deg, var(--profile-start) 0%, var(--profile-middle) 52%, var(--profile-end) 100%);
+  }
+  .dark .profile-banner {
+    background:
+      radial-gradient(circle at 16% 125%, oklch(1 0 0 / 8%) 0 18%, transparent 45%),
+      linear-gradient(112deg, var(--profile-dark-start) 0%, var(--profile-dark-middle) 52%, var(--profile-dark-end) 100%);
+  }
   @keyframes island-float {
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-8px); }

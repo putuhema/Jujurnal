@@ -8,6 +8,11 @@ import { Badge } from "./ui/badge";
 import { getCalendarDate } from "@/lib/calendar-date";
 import { Skeleton } from "./ui/skeleton";
 import Image from "next/image";
+import type { CSSProperties } from "react";
+import {
+  gardenThemeColors,
+  type GardenTheme,
+} from "@/lib/garden-theme";
 
 const GardenLoadingCard = () => (
   <div className="paper-card overflow-hidden rounded-3xl border border-border/70 bg-card/70 p-5">
@@ -78,6 +83,7 @@ export const AllGardensView = () => {
       {
         user: any;
         posts: typeof results;
+        gardenTheme: GardenTheme;
       }
     > = {};
 
@@ -88,6 +94,7 @@ export const AllGardensView = () => {
         gardens[userId] = {
           user: post.user,
           posts: [],
+          gardenTheme: post.gardenTheme,
         };
       }
       gardens[userId].posts.push(post);
@@ -124,7 +131,13 @@ export const AllGardensView = () => {
             .sort(([, a], [, b]) => b.posts.length - a.posts.length)
             .map(([userId, garden]) => {
               return (
-                <div key={userId} className="board-tint paper-card overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5">
+                <div
+                  key={userId}
+                  className="board-tint paper-card overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5"
+                  style={{
+                    "--board-color": gardenThemeColors[garden.gardenTheme],
+                  } as CSSProperties}
+                >
                   <div className="mb-4 flex items-center justify-between border-b border-dashed border-primary/20 pb-4">
                     <div>
                       <h3 className="board-title font-display text-xl tracking-[-0.03em]">

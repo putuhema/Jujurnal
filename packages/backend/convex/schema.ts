@@ -2,6 +2,16 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  gardenPreferences: defineTable({
+    userId: v.string(),
+    theme: v.union(
+      v.literal("ivory"),
+      v.literal("sage"),
+      v.literal("dawn"),
+      v.literal("sky"),
+      v.literal("lilac")
+    ),
+  }).index("by_userId", ["userId"]),
   posts: defineTable({
     body: v.string(),
     userId: v.string(),

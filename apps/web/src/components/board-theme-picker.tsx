@@ -1,65 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { toast } from "sonner";
+
+import { api } from "@puma-brain/backend/convex/_generated/api";
+import { gardenThemes, type GardenTheme } from "@/lib/garden-theme";
 import { cn } from "@/lib/utils";
 
-const storageKey = "jujurnal-board-color";
-const themes = [
-  { name: "Ivory", value: "oklch(0.97 0.018 86)" },
-  { name: "Sage", value: "oklch(0.93 0.035 145)" },
-  { name: "Dawn", value: "oklch(0.95 0.035 65)" },
-  { name: "Sky", value: "oklch(0.93 0.03 230)" },
-  { name: "Lilac", value: "oklch(0.93 0.03 310)" },
-];
-
-const restoreSavedBoardTheme = () => {
-  const saved = window.localStorage.getItem(storageKey);
-  if (saved && themes.some((theme) => theme.value === saved)) {
-    document.documentElement.style.setProperty("--board-color", saved);
-    return saved;
-  }
-  return themes[0].value;
-};
-
-export const BoardThemeInitializer = () => {
-  useEffect(() => {
-    restoreSavedBoardTheme();
-  }, []);
-
-  return null;
-};
-
 export const BoardThemePicker = () => {
-  const [selected, setSelected] = useState(themes[0].value);
+  const selected = useQuery(api.preferences.getMyGardenTheme);
+  const setGardenTheme = useMutation(api.preferences.setGardenTheme)
+    .withOptimisticUpdate((store, args) => {
+      store.setQuery(api.preferences.getMyGardenTheme, {}, args.theme);
+    });
+  const selectedTheme = selected ?? "ivory";
 
   useEffect(() => {
-    setSelected(restoreSavedBoardTheme());
-  }, []);
+    if (selected !== null) return;
+    const legacyColor = window.localStorage.getItem("jujurnal-board-color");
+    const legacyTheme = gardenThemes.find(
+      (theme) => theme.value === legacyColor
+    );
+    if (!legacyTheme) return;
 
-  const selectTheme = (value: string) => {
-    setSelected(value);
-    document.documentElement.style.setProperty("--board-color", value);
-    window.localStorage.setItem(storageKey, value);
+    void setGardenTheme({ theme: legacyTheme.id }).then(
+      () => window.localStorage.removeItem("jujurnal-board-color"),
+      () => undefined
+    );
+  }, [selected, setGardenTheme]);
+
+  const selectTheme = async (theme: GardenTheme) => {
+    try {
+      await setGardenTheme({ theme });
+    } catch {
+      toast.error("Could not save your garden color");
+    }
   };
 
   return (
     <div className="space-y-3">
       <div>
         <p className="text-sm font-medium">Garden board palette</p>
-        <p className="text-xs text-muted-foreground">Choose the color of your garden’s large card. Saved on this device.</p>
+        <p className="text-xs text-muted-foreground">Choose the color visitors see on your garden.</p>
       </div>
       <div className="flex flex-wrap gap-3">
-        {themes.map((theme) => (
+        {gardenThemes.map((theme) => (
           <button
             key={theme.name}
             type="button"
             aria-label={`${theme.name} board color`}
-            aria-pressed={selected === theme.value}
-            onClick={() => selectTheme(theme.value)}
-            className={cn("flex size-10 items-center justify-center rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selected === theme.value ? "scale-110 border-foreground" : "border-transparent")}
+            aria-pressed={selectedTheme === theme.id}
+            onClick={() => void selectTheme(theme.id)}
+            className={cn("flex size-10 items-center justify-center rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", selectedTheme === theme.id ? "scale-110 border-foreground" : "border-transparent")}
             style={{ backgroundColor: theme.value }}
           >
-            {selected === theme.value && <span className="size-2 rounded-full bg-white/90" />}
+            {selectedTheme === theme.id ? <span className="size-2 rounded-full bg-white/90" /> : null}
           </button>
         ))}
       </div>
