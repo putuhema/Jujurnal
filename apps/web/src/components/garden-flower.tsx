@@ -14,7 +14,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
-import { DropIcon, LockKeyIcon } from "@phosphor-icons/react";
+import { DropIcon, LockKeyIcon, PlantIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
@@ -80,14 +80,43 @@ interface GardenFlowerProps {
   visibility: "public" | "private";
   reactionCount: number;
   size?: "xs" | "sm" | "md" | "lg";
-  createdAt: Date
+  createdAt: Date;
+  isNewest?: boolean;
 }
 
 const sizeClasses = {
-  xs: "size-10",
-  sm: "size-11",
-  md: "size-16",
-  lg: "size-20",
+  xs: "size-14",
+  sm: "size-16",
+  md: "size-20",
+  lg: "size-24",
+};
+
+const getPlantTitle = (
+  isPrivate: boolean,
+  isMostRecent: boolean,
+  mood: MoodGrade
+) => {
+  const recency = isMostRecent ? "Most recently planted · " : "";
+  return isPrivate
+    ? `${recency}Private journal`
+    : `${recency}Feeling: ${moodLabels[mood]}`;
+};
+
+const getJournalAriaLabel = (isMostRecent: boolean, mood: MoodGrade) =>
+  `Open ${isMostRecent ? "most recently planted " : ""}${moodLabels[mood]} journal`;
+
+const MostRecentPlantMarker = ({ isMostRecent }: { isMostRecent: boolean }) => {
+  if (!isMostRecent) return null;
+
+  return (
+    <span
+      className="absolute -bottom-0.5 -left-1 z-30 inline-flex size-5 items-center justify-center rounded-full border border-primary/25 bg-card/95 text-primary shadow-sm"
+      aria-label="Most recently planted"
+      title="Most recently planted"
+    >
+      <PlantIcon className="size-3" weight="fill" aria-hidden="true" />
+    </span>
+  );
 };
 
 const PlantReaction = ({
@@ -159,6 +188,7 @@ export const GardenFlower = ({
   reactionCount,
   size = "md",
   createdAt,
+  isNewest = false,
 }: GardenFlowerProps) => {
   const color = moodToColor[mood];
   const safeFlowerId = flowerId && flowerId > 0 ? flowerId : 1;
@@ -196,12 +226,13 @@ export const GardenFlower = ({
   const flower = (
     <div
       className={cn(
-        "garden-plant island-flower relative z-10 flex items-center justify-center",
+        "garden-plant island-flower relative z-10 flex items-center justify-center transition-transform duration-300 hover:scale-110",
         isPrivate ? "cursor-default" : "cursor-pointer",
         sizeClasses[size]
       )}
-      title={isPrivate ? "Private journal" : `Feeling: ${moodLabels[mood]}`}
+      title={getPlantTitle(isPrivate, isNewest, mood)}
     >
+      <MostRecentPlantMarker isMostRecent={isNewest} />
       <div
         className="size-full"
         dangerouslySetInnerHTML={{ __html: flowerSvg }}
@@ -231,7 +262,9 @@ export const GardenFlower = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger aria-label={`Open ${moodLabels[mood]} journal`}>
+      <DialogTrigger
+        aria-label={getJournalAriaLabel(isNewest, mood)}
+      >
         {flower}
       </DialogTrigger>
       <DialogContent>

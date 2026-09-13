@@ -24,33 +24,48 @@ export const IslandGarden = ({
 }: {
   posts: IslandPost[];
   size?: "xs" | "sm" | "md" | "lg";
-}) => (
-  <div className="island-garden relative isolate mx-auto aspect-[1157/1120] w-full max-w-3xl overflow-hidden">
-    <img
-      src="/island.png"
-      alt=""
-      className="pointer-events-none absolute inset-0 size-full object-contain select-none"
-    />
-    {posts.map((post, index) => {
-      const [left, top] = flowerPositions[index % flowerPositions.length];
-      return (
-        <div
-          key={post._id}
-          className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-          style={{ left: `${left}%`, top: `${top}%` }}
-        >
-          <GardenFlower
-            flowerId={post.flowerId || 1}
-            mood={post.mood}
-            text={post.body}
-            postId={post._id}
-            visibility={post.visibility ?? "public"}
-            reactionCount={post.reactionCount ?? 0}
-            size={size}
-            createdAt={new Date(post._creationTime)}
-          />
-        </div>
-      );
-    })}
-  </div>
-);
+}) => {
+  let newestPostId = posts[0]?._id;
+  let newestPostTime = posts[0]?._creationTime ?? 0;
+
+  for (const post of posts) {
+    if (post._creationTime > newestPostTime) {
+      newestPostId = post._id;
+      newestPostTime = post._creationTime;
+    }
+  }
+
+  return (
+    <div className="island-garden relative isolate mx-auto aspect-[1157/1120] w-full max-w-3xl overflow-hidden">
+      <img
+        src="/island.png"
+        alt=""
+        className="pointer-events-none absolute inset-0 size-full object-contain select-none"
+      />
+      {posts.map((post, index) => {
+        const [left, top] = flowerPositions[index % flowerPositions.length];
+        const isNewest = post._id === newestPostId;
+
+        return (
+          <div
+            key={post._id}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 ${isNewest ? "z-20" : "z-10"}`}
+            style={{ left: `${left}%`, top: `${top}%` }}
+          >
+            <GardenFlower
+              flowerId={post.flowerId || 1}
+              mood={post.mood}
+              text={post.body}
+              postId={post._id}
+              visibility={post.visibility ?? "public"}
+              reactionCount={post.reactionCount ?? 0}
+              size={size}
+              createdAt={new Date(post._creationTime)}
+              isNewest={isNewest}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
