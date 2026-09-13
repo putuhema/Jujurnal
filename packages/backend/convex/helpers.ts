@@ -108,3 +108,24 @@ export const getDateStringForDay = (
   const calendarDate = new Date(Date.UTC(year, month - 1, day - daysAgo));
   return calendarDate.toISOString().slice(0, 10);
 };
+
+export const getWeekDateRange = (timestamp: number, timeZone: string) => {
+  const today = getDateString(timestamp, timeZone);
+  const [year, month, day] = today.split("-").map(Number);
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  const weekStart = getDateStringForDay(timestamp, daysSinceMonday, timeZone);
+  const weekEnd = getDateStringForDay(timestamp, daysSinceMonday - 6, timeZone);
+  const previousWeekStart = getDateStringForDay(
+    timestamp,
+    daysSinceMonday + 7,
+    timeZone
+  );
+  const previousWeekEnd = getDateStringForDay(
+    timestamp,
+    daysSinceMonday + 1,
+    timeZone
+  );
+
+  return { today, weekStart, weekEnd, previousWeekStart, previousWeekEnd };
+};
