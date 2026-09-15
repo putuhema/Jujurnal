@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
+import { IslandGardenSkeleton } from "./island-garden-skeleton";
 import { IslandGarden } from "./island-garden";
 import { PeriodToggle, type PeriodView } from "./period-toggle";
 import { Skeleton } from "./ui/skeleton";
@@ -54,9 +55,22 @@ export const GardenView = () => {
 
   if (userPosts === undefined || gardenTheme === undefined) {
     return (
-      <div className="paper-card space-y-5 rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
-        <div className="flex justify-between gap-4"><Skeleton className="h-14 w-52" /><Skeleton className="h-9 w-40" /></div>
-        <Skeleton className="aspect-[1536/1024] w-full rounded-3xl" />
+      <div
+        className="paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7"
+        role="status"
+        aria-label="Loading garden"
+      >
+        <div aria-hidden="true" className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <Skeleton className="h-4 w-48 max-w-full motion-reduce:animate-none" />
+          <Skeleton className="h-9 w-40 motion-reduce:animate-none" />
+        </div>
+        <div aria-hidden="true" className="mb-5 flex flex-wrap items-center gap-2">
+          <Skeleton className="h-9 w-36 motion-reduce:animate-none" />
+          <Skeleton className="h-9 w-28 motion-reduce:animate-none" />
+          <Skeleton className="ml-auto h-4 w-16 motion-reduce:animate-none" />
+        </div>
+        <IslandGardenSkeleton />
+        <span className="sr-only">Growing your garden…</span>
       </div>
     );
   }

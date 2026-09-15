@@ -7,7 +7,7 @@ import { PlantIcon } from "@phosphor-icons/react";
 import { Badge } from "./ui/badge";
 import { getCalendarDate } from "@/lib/calendar-date";
 import { Skeleton } from "./ui/skeleton";
-import Image from "next/image";
+import { IslandGardenSkeleton } from "./island-garden-skeleton";
 import type { CSSProperties } from "react";
 import {
   gardenThemeColors,
@@ -21,19 +21,7 @@ const GardenLoadingCard = () => (
       <Skeleton className="h-7 w-14 rounded-full bg-primary/10" />
     </div>
 
-    <div className="relative mx-auto aspect-[1157/1120] w-full max-w-3xl overflow-hidden">
-      <div className="absolute inset-x-[14%] bottom-[17%] h-[12%] rounded-[50%] bg-primary/10 blur-xl" />
-      <Image
-        src="/island.png"
-        alt=""
-        fill
-        sizes="(min-width: 768px) 50vw, 100vw"
-        className="animate-pulse object-contain opacity-20 grayscale motion-reduce:animate-none"
-      />
-      <span className="absolute left-[29%] top-[34%] size-3 animate-bounce rounded-full bg-primary/25 shadow-[0_0_0_5px_oklch(0.7_0.08_135/10%)] motion-reduce:animate-none" />
-      <span className="absolute left-[53%] top-[27%] size-2.5 animate-bounce rounded-full bg-primary/20 [animation-delay:180ms] motion-reduce:animate-none" />
-      <span className="absolute left-[68%] top-[46%] size-3 animate-bounce rounded-full bg-primary/25 [animation-delay:360ms] motion-reduce:animate-none" />
-    </div>
+    <IslandGardenSkeleton />
   </div>
 );
 

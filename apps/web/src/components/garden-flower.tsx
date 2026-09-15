@@ -16,7 +16,7 @@ import { Button } from "./ui/button";
 import { getPlantSpriteFrame } from "@/lib/garden-sprites";
 import { cn } from "@/lib/utils";
 import { playGardenSound } from "@/lib/garden-sounds";
-import { DropIcon, LockKeyIcon, PlantIcon } from "@phosphor-icons/react";
+import { DropIcon, LockKeyIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
@@ -36,17 +36,17 @@ type MoodGrade =
   | "D-"
   | "F";
 
-const PlantSprite = ({ mood, flowerId }: { mood: MoodGrade; flowerId: number }) => {
-  const { column, row } = getPlantSpriteFrame(mood, flowerId);
+const PlantSprite = ({ flowerId }: { flowerId: number }) => {
+  const { column, row } = getPlantSpriteFrame(flowerId);
   return (
     <span
       aria-hidden="true"
       className="block size-full"
       style={{
-        backgroundImage: 'url("/plants.png")',
+        backgroundImage: 'url("/plants-atlas.webp")',
         backgroundRepeat: "no-repeat",
-        backgroundSize: "1536% 1024%",
-        backgroundPosition: `${((5 + column * 100) / 1436) * 100}% ${((row * 100) / 924) * 100}%`,
+        backgroundSize: "1000% 1000%",
+        backgroundPosition: `${(column / 9) * 100}% ${(row / 9) * 100}%`,
         imageRendering: "pixelated",
       }}
     />
@@ -91,20 +91,6 @@ const getPlantTitle = (
 
 const getJournalAriaLabel = (isMostRecent: boolean, mood: MoodGrade) =>
   `Open ${isMostRecent ? "most recently planted " : ""}${moodLabels[mood]} journal`;
-
-const MostRecentPlantMarker = ({ isMostRecent }: { isMostRecent: boolean }) => {
-  if (!isMostRecent) return null;
-
-  return (
-    <span
-      className="absolute -bottom-0.5 -left-1 z-30 inline-flex size-5 items-center justify-center rounded-full border border-primary/25 bg-card/95 text-primary shadow-sm"
-      aria-label="Most recently planted"
-      title="Most recently planted"
-    >
-      <PlantIcon className="size-3" weight="fill" aria-hidden="true" />
-    </span>
-  );
-};
 
 const PlantReaction = ({
   postId,
@@ -192,8 +178,7 @@ export const GardenFlower = ({
       )}
       title={getPlantTitle(isPrivate, isNewest, mood)}
     >
-      <MostRecentPlantMarker isMostRecent={isNewest} />
-      <PlantSprite mood={mood} flowerId={safeFlowerId} />
+      <PlantSprite flowerId={safeFlowerId} />
       {isPrivate ? (
         <span
           className="absolute -right-1 -top-1 z-20 inline-flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
@@ -219,7 +204,7 @@ export const GardenFlower = ({
     <button
       type="button"
       className={fitPlot ? "block w-full" : undefined}
-      aria-label="Private journal plant"
+      aria-label={isNewest ? "Most recently planted private journal plant" : "Private journal plant"}
       onClick={() => playGardenSound("click")}
     >
       {flower}
@@ -248,7 +233,7 @@ export const GardenFlower = ({
               className="relative flex h-20 w-20 cursor-pointer items-center justify-center"
               title={`Feeling: ${moodLabels[mood]}`}
             >
-              <PlantSprite mood={mood} flowerId={safeFlowerId} />
+              <PlantSprite flowerId={safeFlowerId} />
             </div>
             <div className="absolute bottom-0 right-0">
               <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>
