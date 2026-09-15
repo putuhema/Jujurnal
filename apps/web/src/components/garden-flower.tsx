@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import {
   Dialog,
@@ -13,37 +13,13 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { getPlantSpriteFrame } from "@/lib/garden-sprites";
 import { cn } from "@/lib/utils";
+import { playGardenSound } from "@/lib/garden-sounds";
 import { DropIcon, LockKeyIcon, PlantIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
-
-const flowerSvgCache = new Map<string, Promise<string>>();
-
-const getColoredFlower = (flowerId: number, color: string): Promise<string> => {
-  const cacheKey = `${flowerId}:${color}`;
-  const cached = flowerSvgCache.get(cacheKey);
-  if (cached) return cached;
-
-  const load = async () => {
-    const response = await fetch(`/flower/${flowerId}.svg`);
-    if (!response.ok) {
-      if (flowerId !== 1) return getColoredFlower(1, color);
-      throw new Error("Missing default flower");
-    }
-    const svg = await response.text();
-    return svg
-      .replace(/#0012D4/g, color)
-      .replace(/width="[^"]*"/g, "")
-      .replace(/height="[^"]*"/g, "")
-      .replace("<svg", '<svg class="w-full h-full"');
-  };
-
-  const promise = load();
-  flowerSvgCache.set(cacheKey, promise);
-  return promise;
-};
 
 type MoodGrade =
   | "A+"
@@ -60,11 +36,21 @@ type MoodGrade =
   | "D-"
   | "F";
 
-const moodToColor: Record<MoodGrade, string> = {
-  "A+": "#c84f67", A: "#d86373", "A-": "#e17b85",
-  "B+": "#d99d42", B: "#d99d42", "B-": "#d99d42",
-  "C+": "#5f9290", C: "#5f9290", "C-": "#5f9290",
-  "D+": "#8b638d", D: "#8b638d", "D-": "#8b638d", F: "#4d6685",
+const PlantSprite = ({ mood, flowerId }: { mood: MoodGrade; flowerId: number }) => {
+  const { column, row } = getPlantSpriteFrame(mood, flowerId);
+  return (
+    <span
+      aria-hidden="true"
+      className="block size-full"
+      style={{
+        backgroundImage: 'url("/plants.png")',
+        backgroundRepeat: "no-repeat",
+        backgroundSize: "1536% 1024%",
+        backgroundPosition: `${((5 + column * 100) / 1436) * 100}% ${((row * 100) / 924) * 100}%`,
+        imageRendering: "pixelated",
+      }}
+    />
+  );
 };
 
 const moodLabels: Record<MoodGrade, string> = {
@@ -82,6 +68,7 @@ interface GardenFlowerProps {
   size?: "xs" | "sm" | "md" | "lg";
   createdAt: Date;
   isNewest?: boolean;
+  fitPlot?: boolean;
 }
 
 const sizeClasses = {
@@ -189,54 +176,24 @@ export const GardenFlower = ({
   size = "md",
   createdAt,
   isNewest = false,
+  fitPlot = false,
 }: GardenFlowerProps) => {
-  const color = moodToColor[mood];
-  const safeFlowerId = flowerId && flowerId > 0 ? flowerId : 1;
+  const safeFlowerId = flowerId && Number.isFinite(flowerId) && flowerId > 0 ? Math.floor(flowerId) : 1;
   const isPrivate = visibility === "private";
 
-  const [flowerSvg, setFlowerSvg] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-
-  useEffect(() => {
-    let isActive = true;
-    setFlowerSvg(null);
-    getColoredFlower(safeFlowerId, color)
-      .then((svg) => {
-        if (isActive) setFlowerSvg(svg);
-      })
-      .catch(() => {
-        if (isActive) setFlowerSvg(null);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [safeFlowerId, color]);
-
-  if (!flowerSvg) {
-    return (
-      <div
-        className={cn("flex items-center justify-center border border-dashed rounded", sizeClasses[size])}
-      >
-        <div className="w-4 h-4 border-2 border-muted-foreground rounded-full animate-pulse" />
-      </div>
-    );
-  }
 
   const flower = (
     <div
       className={cn(
         "garden-plant island-flower relative z-10 flex items-center justify-center transition-transform duration-300 hover:scale-110",
-        isPrivate ? "cursor-default" : "cursor-pointer",
-        sizeClasses[size]
+        "cursor-pointer",
+        fitPlot ? "aspect-square w-full" : sizeClasses[size]
       )}
       title={getPlantTitle(isPrivate, isNewest, mood)}
     >
       <MostRecentPlantMarker isMostRecent={isNewest} />
-      <div
-        className="size-full"
-        dangerouslySetInnerHTML={{ __html: flowerSvg }}
-      />
+      <PlantSprite mood={mood} flowerId={safeFlowerId} />
       {isPrivate ? (
         <span
           className="absolute -right-1 -top-1 z-20 inline-flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
@@ -258,11 +215,22 @@ export const GardenFlower = ({
     </div>
   );
 
-  if (isPrivate) return flower;
+  if (isPrivate) return (
+    <button
+      type="button"
+      className={fitPlot ? "block w-full" : undefined}
+      aria-label="Private journal plant"
+      onClick={() => playGardenSound("click")}
+    >
+      {flower}
+    </button>
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger
+        onClick={() => playGardenSound("click")}
+        className={fitPlot ? "block w-full" : undefined}
         aria-label={getJournalAriaLabel(isNewest, mood)}
       >
         {flower}
@@ -280,10 +248,7 @@ export const GardenFlower = ({
               className="relative flex h-20 w-20 cursor-pointer items-center justify-center"
               title={`Feeling: ${moodLabels[mood]}`}
             >
-              <div
-                className="w-full h-full"
-                dangerouslySetInnerHTML={{ __html: flowerSvg }}
-              />
+              <PlantSprite mood={mood} flowerId={safeFlowerId} />
             </div>
             <div className="absolute bottom-0 right-0">
               <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>

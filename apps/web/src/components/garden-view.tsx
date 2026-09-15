@@ -56,7 +56,7 @@ export const GardenView = () => {
     return (
       <div className="paper-card space-y-5 rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7">
         <div className="flex justify-between gap-4"><Skeleton className="h-14 w-52" /><Skeleton className="h-9 w-40" /></div>
-        <Skeleton className="aspect-[1157/1120] w-full rounded-3xl" />
+        <Skeleton className="aspect-[1536/1024] w-full rounded-3xl" />
       </div>
     );
   }

@@ -14,6 +14,7 @@ import { Spinner } from "./ui/spinner";
 import { GlobeHemisphereWestIcon, LockKeyIcon } from "@phosphor-icons/react";
 import { Sprout } from "lucide-react";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
+import { playGardenSound, prepareGardenAudio } from "@/lib/garden-sounds";
 
 type EntryAvailability = {
   today: string;
@@ -63,6 +64,7 @@ export const PostForm = ({
           entryDate,
           visibility,
         });
+        playGardenSound("plant");
         form.reset();
       } catch (err: any) {
         setError(err.message || "Failed to create post");
@@ -84,6 +86,7 @@ export const PostForm = ({
         onSubmit={(e) => {
           e.preventDefault();
           if (!isDisabled) {
+            prepareGardenAudio();
             form.handleSubmit();
           }
         }}
