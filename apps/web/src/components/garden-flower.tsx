@@ -36,7 +36,15 @@ type MoodGrade =
   | "D-"
   | "F";
 
-const PlantSprite = ({ flowerId }: { flowerId: number }) => {
+const moodGrayscale: Record<MoodGrade, number> = {
+  "A+": 0, A: 0, "A-": 0.05,
+  "B+": 0.1, B: 0.2, "B-": 0.3,
+  "C+": 0.4, C: 0.5, "C-": 0.6,
+  "D+": 0.7, D: 0.8, "D-": 0.9,
+  F: 1,
+};
+
+const PlantSprite = ({ flowerId, mood }: { flowerId: number; mood: MoodGrade }) => {
   const { column, row } = getPlantSpriteFrame(flowerId);
   return (
     <span
@@ -48,6 +56,7 @@ const PlantSprite = ({ flowerId }: { flowerId: number }) => {
         backgroundSize: "1000% 1000%",
         backgroundPosition: `${(column / 9) * 100}% ${(row / 9) * 100}%`,
         imageRendering: "pixelated",
+        filter: `grayscale(${moodGrayscale[mood]})`,
       }}
     />
   );
@@ -176,7 +185,7 @@ export const GardenFlower = ({
       )}
       title={getPlantTitle(isPrivate, isNewest, mood)}
     >
-      <PlantSprite flowerId={safeFlowerId} />
+      <PlantSprite flowerId={safeFlowerId} mood={mood} />
       {isPrivate ? (
         <span
           className="absolute -right-1 -top-1 z-20 inline-flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
@@ -222,7 +231,7 @@ export const GardenFlower = ({
               className="relative flex h-20 w-20 cursor-pointer items-center justify-center"
               title={`Feeling: ${moodLabels[mood]}`}
             >
-              <PlantSprite flowerId={safeFlowerId} />
+              <PlantSprite flowerId={safeFlowerId} mood={mood} />
             </div>
             <div className="absolute bottom-0 right-0">
               <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>

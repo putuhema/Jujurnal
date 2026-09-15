@@ -61,13 +61,13 @@ export const IslandGarden = ({
             return (
               <div
                 key={post._id}
-                className="group/plot absolute w-[8%] focus-within:z-50! hover:z-50!"
+                className="group/plot absolute w-[10%] focus-within:z-50! hover:z-50!"
                 style={{ left: `${left / 1536 * 100}%`, top: `${top / 1024 * 100}%`, zIndex: index + 1, transform: `translate(-${anchorX}%, -${anchorY}%)` }}
               >
                 <svg
                   aria-hidden="true"
                   viewBox="0 0 160 96"
-                  className={`pointer-events-none absolute w-[130%] -translate-x-1/2 -translate-y-1/2 overflow-visible transition-opacity duration-150 motion-reduce:transition-none group-hover/plot:opacity-100 group-focus-within/plot:opacity-100 ${isNewest ? "opacity-100" : "opacity-0"}`}
+                  className={`pointer-events-none absolute w-[104%] -translate-x-1/2 -translate-y-1/2 overflow-visible transition-opacity duration-150 motion-reduce:transition-none group-hover/plot:opacity-100 group-focus-within/plot:opacity-100 ${isNewest ? "opacity-100" : "opacity-0"}`}
                   style={{ left: `${anchorX}%`, top: `${anchorY}%` }}
                 >
                   <path
