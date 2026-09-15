@@ -64,7 +64,6 @@ interface GardenFlowerProps {
   postId: Id<"posts">;
   text: string;
   visibility: "public" | "private";
-  reactionCount: number;
   size?: "xs" | "sm" | "md" | "lg";
   createdAt: Date;
   isNewest?: boolean;
@@ -158,7 +157,6 @@ export const GardenFlower = ({
   postId,
   text,
   visibility,
-  reactionCount,
   size = "md",
   createdAt,
   isNewest = false,
@@ -186,15 +184,6 @@ export const GardenFlower = ({
           aria-label="Private journal"
         >
           <LockKeyIcon className="size-3" weight="fill" />
-        </span>
-      ) : reactionCount > 0 ? (
-        <span
-          className="absolute -right-1 -top-1 z-20 inline-flex h-5 min-w-5 items-center justify-center gap-0.5 rounded-full border border-sky-300 bg-sky-100 px-1 text-[10px] font-bold tabular-nums text-sky-800 shadow-sm dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200"
-          role="img"
-          aria-label={`${reactionCount} ${reactionCount === 1 ? "watering" : "waterings"}`}
-        >
-          <DropIcon className="size-2.5" weight="fill" />
-          {reactionCount}
         </span>
       ) : null}
     </div>

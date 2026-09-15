@@ -85,7 +85,6 @@ export const IslandGarden = ({
                   text={post.body}
                   postId={post._id}
                   visibility={post.visibility ?? "public"}
-                  reactionCount={post.reactionCount ?? 0}
                   size={size}
                   createdAt={new Date(post._creationTime)}
                   isNewest={isNewest}
