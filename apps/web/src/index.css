@@ -175,3 +175,21 @@
     .island-garden { animation: none; }
   }
 }
+
+/* Transform the island and plants together so plot anchors stay aligned. */
+.garden-zoom-scene {
+  transform: none;
+  transition: transform 280ms ease-out;
+}
+.garden-zoom-scene[data-zoom="on"] {
+  transform: translateY(4%) scale(1.22);
+}
+@media (max-width: 639px) {
+  .garden-zoom-scene[data-zoom="on"],
+  .garden-zoom-scene[data-zoom="auto"] {
+    transform: translateY(7%) scale(1.34);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .garden-zoom-scene { transition: none; }
+}

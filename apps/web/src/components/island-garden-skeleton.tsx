@@ -4,10 +4,15 @@ export const IslandGardenSkeleton = () => {
   preload("/plants-atlas.webp", { as: "image" });
 
   return (
+  <div aria-hidden="true" className="space-y-4">
+    <div className="flex justify-end">
+      <div className="h-8 w-28 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
+    </div>
   <div
     aria-hidden="true"
     className="relative mx-auto aspect-[1536/1024] w-full max-w-3xl overflow-hidden"
   >
+    <div className="garden-zoom-scene absolute inset-0" data-zoom="auto">
     <img
       src="/main_island.webp"
       alt=""
@@ -27,6 +32,8 @@ export const IslandGardenSkeleton = () => {
         }}
       />
     ))}
+    </div>
+  </div>
   </div>
   );
 };
