@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { ZoomIn, ZoomOut } from "lucide-react";
-import { Button } from "./ui/button";
+import { useGardenZoom } from "./garden-zoom";
 import { preload } from "react-dom";
 import { getPlantSpriteFrame } from "@/lib/garden-sprites";
 import { GardenFlower } from "./garden-flower";
@@ -30,15 +28,6 @@ const flowerPositions = [
   [570, 698], [765, 698], [962, 698],
 ] as const;
 
-const mobileQuery = "(max-width: 639px)";
-const subscribeToMobile = (onChange: () => void) => {
-  const query = window.matchMedia(mobileQuery);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-};
-const getMobileSnapshot = () => window.matchMedia(mobileQuery).matches;
-const getServerMobileSnapshot = () => false;
-
 export const IslandGarden = ({
   posts,
   size = "md",
@@ -46,11 +35,9 @@ export const IslandGarden = ({
   posts: IslandPost[];
   size?: "xs" | "sm" | "md" | "lg";
 }) => {
-  const isMobile = useSyncExternalStore(subscribeToMobile, getMobileSnapshot, getServerMobileSnapshot);
-  const [zoomOverride, setZoomOverride] = useState<boolean | null>(null);
-  const isZoomed = zoomOverride ?? isMobile;
+  const { zoomMode } = useGardenZoom();
 
-  preload("/plants-atlas.webp", { as: "image" });
+  preload("/plants-sprite.webp", { as: "image" });
 
   let newestPostId = posts[0]?._id;
   let newestPostTime = posts[0]?._creationTime ?? 0;
@@ -64,25 +51,11 @@ export const IslandGarden = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="rounded-full"
-          aria-pressed={isZoomed}
-          aria-label="Focus on garden plots"
-          onClick={() => setZoomOverride(!isZoomed)}
-        >
-          {isZoomed ? <ZoomOut aria-hidden="true" /> : <ZoomIn aria-hidden="true" />}
-          {isZoomed ? "Whole island" : "Focus plots"}
-        </Button>
-      </div>
       {Array.from({ length: Math.max(1, Math.ceil(posts.length / flowerPositions.length)) }, (_, page) => (
         <div key={page} className="relative isolate mx-auto aspect-[1536/1024] w-full max-w-3xl overflow-hidden rounded-2xl">
           <div
             className="garden-zoom-scene absolute inset-0"
-            data-zoom={zoomOverride === null ? "auto" : isZoomed ? "on" : "off"}
+            data-zoom={zoomMode}
           >
           <img
             src="/main_island.webp"

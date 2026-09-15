@@ -193,3 +193,23 @@
 @media (prefers-reduced-motion: reduce) {
   .garden-zoom-scene { transition: none; }
 }
+
+@keyframes plant-grow-in {
+  0% { transform: scale(0); opacity: 0; }
+  75% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes plant-root-sway {
+  0%, 100% { transform: rotate(-3.5deg); }
+  50% { transform: rotate(3.5deg); }
+}
+.plant-sprite[data-visible="false"] .plant-growth { opacity: 0; }
+.plant-sprite[data-visible="true"] .plant-growth {
+  animation: plant-grow-in 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.plant-sway { animation: plant-root-sway 5s ease-in-out infinite; }
+.plant-sprite[data-visible="false"] .plant-sway { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .plant-sprite .plant-growth, .plant-sprite .plant-sway { animation: none; }
+  .plant-sprite[data-visible="true"] .plant-growth { opacity: 1; }
+}

@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
+import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
+import { X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -45,20 +40,51 @@ const moodGrayscale: Record<MoodGrade, number> = {
 };
 
 const PlantSprite = ({ flowerId, mood }: { flowerId: number; mood: MoodGrade }) => {
-  const { column, row } = getPlantSpriteFrame(flowerId);
+  const { column, row, anchorX, anchorY } = getPlantSpriteFrame(flowerId);
+  const spriteRef = useRef<HTMLSpanElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const origin = `${anchorX}% ${anchorY}%`;
+
+  useEffect(() => {
+    const element = spriteRef.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsVisible(entry.isIntersecting);
+    }, { threshold: 0.1 });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <span
-      aria-hidden="true"
-      className="block size-full"
-      style={{
-        backgroundImage: 'url("/plants-atlas.webp")',
-        backgroundRepeat: "no-repeat",
-        backgroundSize: "1000% 1000%",
-        backgroundPosition: `${(column / 9) * 100}% ${(row / 9) * 100}%`,
-        imageRendering: "pixelated",
-        filter: `grayscale(${moodGrayscale[mood]})`,
-      }}
-    />
+    <span ref={spriteRef} aria-hidden="true" className="plant-sprite block size-full" data-visible={isVisible && isLoaded}>
+      <span className="plant-growth block size-full" style={{ transformOrigin: origin }}>
+        <span
+          className="plant-sway relative block size-full overflow-hidden"
+          style={{
+            transformOrigin: origin,
+            animationDuration: `${3.2 + (flowerId % 7) * 0.2}s`,
+            animationDelay: `${-(flowerId % 11) * 0.4}s`,
+            filter: `grayscale(${moodGrayscale[mood]})`,
+          }}
+        >
+          <img
+            src="/plants-sprite.webp"
+            alt=""
+            draggable={false}
+            onLoad={() => setIsLoaded(true)}
+            className="pointer-events-none absolute max-w-none select-none"
+            style={{
+              width: "1400%",
+              height: "700%",
+              left: `${-column * 100}%`,
+              top: `${-row * 100}%`,
+              imageRendering: "pixelated",
+            }}
+          />
+        </span>
+      </span>
+    </span>
   );
 };
 
@@ -160,6 +186,48 @@ const PlantReaction = ({
   );
 };
 
+const JournalTypewriter = ({ text }: { text: string }) => {
+  const characters = Array.from(text);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const finished = showAll || visibleCount >= characters.length;
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const revealForReducedMotion = () => {
+      if (preference.matches) setShowAll(true);
+    };
+    revealForReducedMotion();
+    preference.addEventListener("change", revealForReducedMotion);
+    return () => preference.removeEventListener("change", revealForReducedMotion);
+  }, []);
+
+  useEffect(() => {
+    if (finished) return;
+    const timer = window.setInterval(() => {
+      setVisibleCount((count) => Math.min(count + 1, characters.length));
+    }, 18);
+    return () => window.clearInterval(timer);
+  }, [characters.length, finished]);
+
+  return (
+    <div>
+      <p className="sr-only">{text}</p>
+      <div aria-hidden="true" className="grid whitespace-pre-wrap break-words leading-relaxed [overflow-wrap:anywhere]">
+        <span className="invisible col-start-1 row-start-1">{text}</span>
+        <span className="col-start-1 row-start-1">
+          {finished ? text : characters.slice(0, visibleCount).join("")}
+        </span>
+      </div>
+      {!finished ? (
+        <button type="button" onClick={() => setShowAll(true)} className="mt-2 text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground">
+          Show all
+        </button>
+      ) : null}
+    </div>
+  );
+};
+
 export const GardenFlower = ({
   flowerId,
   mood,
@@ -172,6 +240,7 @@ export const GardenFlower = ({
   fitPlot = false,
 }: GardenFlowerProps) => {
   const safeFlowerId = flowerId && Number.isFinite(flowerId) && flowerId > 0 ? Math.floor(flowerId) : 1;
+  const { anchorX, anchorY } = getPlantSpriteFrame(safeFlowerId);
   const isPrivate = visibility === "private";
 
   const [isOpen, setIsOpen] = useState(false);
@@ -183,6 +252,7 @@ export const GardenFlower = ({
         "cursor-pointer",
         fitPlot ? "aspect-square w-full" : sizeClasses[size]
       )}
+      style={{ transformOrigin: `${anchorX}% ${anchorY}%` }}
       title={getPlantTitle(isPrivate, isNewest, mood)}
     >
       <PlantSprite flowerId={safeFlowerId} mood={mood} />
@@ -210,46 +280,42 @@ export const GardenFlower = ({
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger
         onClick={() => playGardenSound("click")}
         className={fitPlot ? "block w-full" : undefined}
         aria-label={getJournalAriaLabel(isNewest, mood)}
       >
         {flower}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader className="sr-only">
-          <DialogTitle>Journal plant</DialogTitle>
-          <DialogDescription>
-            Read this journal entry and send a little encouragement.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-3 gap-4 px-4">
-          <div className="place-self-center relative">
-            <div
-              className="relative flex h-20 w-20 cursor-pointer items-center justify-center"
-              title={`Feeling: ${moodLabels[mood]}`}
-            >
-              <PlantSprite flowerId={safeFlowerId} mood={mood} />
-            </div>
-            <div className="absolute bottom-0 right-0">
-              <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>
-            </div>
-          </div>
-          <div className="col-span-2 flex min-w-0 flex-col justify-center">
-            <p className="leading-relaxed">{text}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(createdAt), {
-                addSuffix: true,
-              })}
-            </p>
-          </div>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        sideOffset={12}
+        className="relative w-72 max-w-[calc(100vw-2rem)] gap-3 rounded-2xl border border-primary/20 bg-card p-4 text-card-foreground shadow-xl motion-reduce:animate-none"
+      >
+        <PopoverPrimitive.Arrow className="absolute h-3 w-6 text-card data-[side=top]:-bottom-[10px] data-[side=bottom]:-top-[10px] data-[side=bottom]:rotate-180">
+          <svg viewBox="0 0 24 12" className="size-full" aria-hidden="true">
+            <path d="M0 0 12 11 24 0" fill="currentColor" />
+            <path d="m0 0 12 11 12-11" fill="none" className="stroke-primary/20" />
+          </svg>
+        </PopoverPrimitive.Arrow>
+        <div className="flex items-center justify-between gap-3">
+          <PopoverTitle className="sr-only">Journal plant</PopoverTitle>
+          <Badge variant="outline" className="rounded-full">{moodLabels[mood]}</Badge>
+          <PopoverPrimitive.Close aria-label="Close journal bubble" className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring">
+            <X className="size-4" aria-hidden="true" />
+          </PopoverPrimitive.Close>
         </div>
-        <div className="flex items-center justify-end px-4">
+        <div className="max-h-[min(45vh,20rem)] overflow-y-auto">
+          {isOpen ? <JournalTypewriter key={text} text={text} /> : null}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+          <span className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+          </span>
           <PlantReaction postId={postId} isOpen={isOpen} />
         </div>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
 };

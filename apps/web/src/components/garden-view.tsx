@@ -6,6 +6,7 @@ import { useQuery } from "convex/react";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { IslandGardenSkeleton } from "./island-garden-skeleton";
+import { GardenZoomProvider, GardenZoomToggle } from "./garden-zoom";
 import { IslandGarden } from "./island-garden";
 import { PeriodToggle, type PeriodView } from "./period-toggle";
 import { Skeleton } from "./ui/skeleton";
@@ -67,7 +68,10 @@ export const GardenView = () => {
         <div aria-hidden="true" className="mb-5 flex flex-wrap items-center gap-2">
           <Skeleton className="h-9 w-36 motion-reduce:animate-none" />
           <Skeleton className="h-9 w-28 motion-reduce:animate-none" />
-          <Skeleton className="ml-auto h-4 w-16 motion-reduce:animate-none" />
+          <div className="ml-auto flex items-center gap-1">
+            <Skeleton className="h-4 w-16 motion-reduce:animate-none" />
+            <Skeleton className="size-8 rounded-full motion-reduce:animate-none" />
+          </div>
         </div>
         <IslandGardenSkeleton />
         <span className="sr-only">Growing your garden…</span>
@@ -78,6 +82,7 @@ export const GardenView = () => {
   const periodLabel = view === "month" ? `${monthNames[selectedMonth]} ${selectedYear}` : selectedYear.toString();
 
   return (
+    <GardenZoomProvider>
     <section
       className="board-tint paper-card rounded-3xl border border-primary/10 bg-card/75 p-5 sm:p-7"
       style={{ "--board-color": gardenThemeColors[gardenTheme] } as CSSProperties}
@@ -100,7 +105,10 @@ export const GardenView = () => {
           <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
           <SelectContent>{yearOptions.map((year) => <SelectItem key={year} value={year.toString()}>{year}</SelectItem>)}</SelectContent>
         </Select>
-        <span className="board-copy ml-auto text-xs font-medium">{visiblePosts.length} {visiblePosts.length === 1 ? "flower" : "flowers"}</span>
+        <div className="ml-auto flex items-center gap-1">
+          <span className="board-copy text-xs font-medium">{visiblePosts.length} {visiblePosts.length === 1 ? "flower" : "flowers"}</span>
+          {visiblePosts.length > 0 ? <GardenZoomToggle /> : null}
+        </div>
       </div>
 
       {visiblePosts.length === 0 ? (
@@ -112,5 +120,6 @@ export const GardenView = () => {
         <IslandGarden posts={visiblePosts} />
       )}
     </section>
+    </GardenZoomProvider>
   );
 };

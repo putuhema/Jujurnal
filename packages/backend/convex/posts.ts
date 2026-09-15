@@ -12,7 +12,7 @@ import { paginationOptsValidator } from "convex/server";
 import { analyzeMood } from "./analysis";
 import { getDateString, getDateStringForDay } from "./helpers";
 
-const FLOWER_COUNT = 100;
+const FLOWER_COUNT = 98;
 
 export const getAll = query({
   args: { paginationOpts: paginationOptsValidator },

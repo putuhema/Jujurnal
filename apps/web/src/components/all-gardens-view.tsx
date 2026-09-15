@@ -2,6 +2,7 @@
 
 import { usePaginatedQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
+import { GardenZoomProvider, GardenZoomToggle } from "./garden-zoom";
 import { IslandGarden } from "./island-garden";
 import { PlantIcon } from "@phosphor-icons/react";
 import { Badge } from "./ui/badge";
@@ -18,7 +19,10 @@ const GardenLoadingCard = () => (
   <div className="paper-card overflow-hidden rounded-3xl border border-border/70 bg-card/70 p-5">
     <div className="mb-4 flex items-center justify-between border-b border-dashed border-primary/15 pb-4">
       <Skeleton className="h-6 w-36 rounded-full bg-primary/10" />
-      <Skeleton className="h-7 w-14 rounded-full bg-primary/10" />
+      <div className="flex items-center gap-1">
+        <Skeleton className="h-7 w-14 rounded-full bg-primary/10" />
+        <Skeleton className="size-8 rounded-full bg-primary/10" />
+      </div>
     </div>
 
     <IslandGardenSkeleton />
@@ -107,8 +111,8 @@ export const AllGardensView = () => {
             .sort(([, a], [, b]) => b.posts.length - a.posts.length)
             .map(([userId, garden]) => {
               return (
+                <GardenZoomProvider key={userId}>
                 <div
-                  key={userId}
                   className="board-tint paper-card overflow-hidden rounded-3xl border border-border/80 bg-card/80 p-5"
                   style={{
                     "--board-color": gardenThemeColors[garden.gardenTheme],
@@ -120,13 +124,17 @@ export const AllGardensView = () => {
                         {garden.user.name}'s garden
                       </h3>
                     </div>
+                    <div className="flex items-center gap-1">
                     <Badge variant="outline" className="rounded-full bg-background/50">
                       <PlantIcon />
                       {garden.posts.length}
                     </Badge>
+                    <GardenZoomToggle />
+                    </div>
                   </div>
                   <IslandGarden posts={garden.posts} size="xs" />
                 </div>
+                </GardenZoomProvider>
               );
             })}
         </div>
