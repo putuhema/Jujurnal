@@ -11,6 +11,7 @@ import {
   getPlantGrowth,
   moodGrayscale,
   plantArchetypes,
+  plantVariants,
   type MoodGrade,
   type PlantArchetype,
   type PlantModel,
@@ -36,7 +37,7 @@ const usePlant = (seed: string, options: Parameters<typeof createPlant>[1]) => {
   const plant = useMemo(
     () => createPlant(seed, options),
     // options is rebuilt each render, so depend on its fields.
-    [seed, options.mood, options.waterings, options.archetype]
+    [seed, options.mood, options.waterings, options.archetype, options.variant]
   );
   useEffect(() => () => plant.geometry.dispose(), [plant]);
   return plant;
@@ -104,6 +105,7 @@ const GalleryPlant = ({
   mood,
   waterings,
   archetype,
+  variant,
   isSelected,
   sway,
   onSelect,
@@ -113,11 +115,12 @@ const GalleryPlant = ({
   mood: MoodGrade;
   waterings: number;
   archetype?: PlantArchetype;
+  variant?: string;
   isSelected: boolean;
   sway: boolean;
   onSelect: (seed: string) => void;
 }) => {
-  const plant = usePlant(seed, { mood, waterings, archetype });
+  const plant = usePlant(seed, { mood, waterings, archetype, variant });
   const [isHovered, setIsHovered] = useState(false);
   const column = index % galleryColumns;
   const row = Math.floor(index / galleryColumns);
@@ -181,6 +184,7 @@ export default function PlantLab() {
   const [baseSeed, setBaseSeed] = useState("jujurnal");
   const [selectedSeed, setSelectedSeed] = useState("jujurnal-0");
   const [archetype, setArchetype] = useState<PlantArchetype | "random">("random");
+  const [variant, setVariant] = useState("random");
   const [mood, setMood] = useState<MoodGrade>("A+");
   const [waterings, setWaterings] = useState(0);
   const [ageDays, setAgeDays] = useState(5);
@@ -190,7 +194,8 @@ export default function PlantLab() {
   const [showGarden, setShowGarden] = useState(false);
 
   const forced = archetype === "random" ? undefined : archetype;
-  const plant = usePlant(selectedSeed, { mood, waterings, archetype: forced });
+  const forcedVariant = forced && variant !== "random" ? variant : undefined;
+  const plant = usePlant(selectedSeed, { mood, waterings, archetype: forced, variant: forcedVariant });
   const growth = getPlantGrowth(0, ageDays * 86_400_000);
   const triangles = plant.geometry.attributes.position.count / 3;
 
@@ -230,7 +235,13 @@ export default function PlantLab() {
         </Field>
 
         <Field label="Type">
-          <Select value={archetype} onValueChange={(value) => setArchetype(value as PlantArchetype | "random")}>
+          <Select
+            value={archetype}
+            onValueChange={(value) => {
+              setArchetype(value as PlantArchetype | "random");
+              setVariant("random");
+            }}
+          >
             <SelectTrigger className="w-full capitalize"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="random">random</SelectItem>
@@ -238,6 +249,18 @@ export default function PlantLab() {
             </SelectContent>
           </Select>
         </Field>
+
+        {forced && plantVariants(forced).length > 1 ? (
+          <Field label="Variant">
+            <Select value={variant} onValueChange={(value) => setVariant(value as string)}>
+              <SelectTrigger className="w-full capitalize"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="random">random</SelectItem>
+                {plantVariants(forced).map((name) => <SelectItem key={name} value={name} className="capitalize">{name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : null}
 
         <Field label="Mood">
           <Select value={mood} onValueChange={(value) => setMood(value as MoodGrade)}>
@@ -266,6 +289,7 @@ export default function PlantLab() {
 
         <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-2xl bg-muted/50 p-3 font-mono text-xs">
           <dt className="text-muted-foreground">type</dt><dd className="capitalize">{plant.archetype}</dd>
+          <dt className="text-muted-foreground">variant</dt><dd className="capitalize">{plant.variant}</dd>
           <dt className="text-muted-foreground">height</dt><dd>{(plant.height * growth).toFixed(2)}</dd>
           <dt className="text-muted-foreground">triangles</dt><dd>{triangles.toLocaleString()}</dd>
         </dl>
@@ -281,7 +305,7 @@ export default function PlantLab() {
 
         <section className="paper-card overflow-hidden rounded-3xl border border-border/70 bg-card/80">
           <div className="aspect-video w-full">
-            <Gallery baseSeed={baseSeed} selectedSeed={selectedSeed} mood={mood} waterings={waterings} archetype={forced} sway={sway} onSelect={setSelectedSeed} />
+            <Gallery baseSeed={baseSeed} selectedSeed={selectedSeed} mood={mood} waterings={waterings} archetype={forced} variant={forcedVariant} sway={sway} onSelect={setSelectedSeed} />
           </div>
           <p className="px-5 pb-4 text-xs text-muted-foreground">12 variations of seed “{baseSeed}” · click one to inspect it</p>
         </section>

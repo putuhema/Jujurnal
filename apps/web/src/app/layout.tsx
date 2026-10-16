@@ -19,7 +19,7 @@ const dmSerif = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Jujurnal — a little room for your thoughts",
+  title: "Bloom — a little room for your thoughts",
   description: "A gentle daily journal that grows with you.",
 };
 

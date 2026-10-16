@@ -8,7 +8,6 @@
     "start": "next start"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.5",
     "@base-ui/react": "^1.0.0",
     "@convex-dev/better-auth": "catalog:",
     "@phosphor-icons/react": "^2.1.10",
@@ -16,7 +15,6 @@
     "@puma-brain/env": "workspace:*",
     "@react-three/fiber": "^9.8.2",
     "@tanstack/react-form": "^1.27.7",
-    "ai": "^6.0.5",
     "babel-plugin-react-compiler": "^1.0.0",
     "better-auth": "catalog:",
     "class-variance-authority": "^0.7.1",

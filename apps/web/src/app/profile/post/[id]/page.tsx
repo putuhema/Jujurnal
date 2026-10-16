@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useAction, useMutation, usePaginatedQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   Item,
@@ -36,6 +36,7 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { MoodPicker } from "@/components/mood-picker";
 
 type MoodGrade =
   | "A+"
@@ -64,28 +65,55 @@ const moodLabels: Record<MoodGrade, string> = {
   "C+": "Steady", C: "Steady", "C-": "Steady", "D+": "Low tide", D: "Low tide", "D-": "Low tide", F: "Heavy",
 };
 
+const PAGE_SIZE = 20;
+
 export default function UserPost() {
   const params = useParams();
   const userId = params.id as string;
   const { data: session } = authClient.useSession();
-  const posts = useQuery(api.posts.getByUserId, { userId });
+  const [search, setSearch] = useState("");
+  // Search on the server once typing pauses, across every entry (not only loaded ones).
+  const [searchTerm, setSearchTerm] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchTerm(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+  const { results: posts, status, loadMore } = usePaginatedQuery(
+    api.posts.getUserPage,
+    { userId, search: searchTerm || undefined },
+    { initialNumItems: PAGE_SIZE }
+  );
+  // The full skeleton is for the first visit only; later searches keep the search box on screen.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  if (!hasLoaded && status !== "LoadingFirstPage") setHasLoaded(true);
+  // Older entries load as the end of the list scrolls into view.
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const end = endRef.current;
+    if (!end || status !== "CanLoadMore") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore(PAGE_SIZE);
+      },
+      { rootMargin: "800px 0px" }
+    );
+    observer.observe(end);
+    return () => observer.disconnect();
+  }, [status, loadMore]);
   const deletePost = useMutation(api.posts.deletePost);
   const updatePost = useAction(api.posts.updatePost);
-  const [search, setSearch] = useState("");
   const [editingPost, setEditingPost] = useState<any>(null);
   const [editedBody, setEditedBody] = useState("");
   const [editedVisibility, setEditedVisibility] = useState<"public" | "private">("public");
+  const [editedMood, setEditedMood] = useState<MoodGrade | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const filteredPosts = (() => {
-    if (!posts) return [];
-    const query = search.trim().toLowerCase();
-    return query ? posts.filter((post) => post.body.toLowerCase().includes(query)) : posts;
-  })();
+  const filteredPosts = posts;
 
   const beginEditing = (post: any) => {
     setEditingPost(post);
     setEditedBody(post.body);
     setEditedVisibility(post.visibility ?? "public");
+    setEditedMood(post.mood ?? null);
   };
 
   const saveEdit = async () => {
@@ -96,6 +124,8 @@ export default function UserPost() {
         id: editingPost._id,
         body: editedBody,
         visibility: editedVisibility,
+        // Only sent when changed, so older in-between grades are kept as they were.
+        mood: editedMood && editedMood !== editingPost.mood ? editedMood : undefined,
       });
       setEditingPost(null);
       toast.success("Entry updated");
@@ -105,7 +135,7 @@ export default function UserPost() {
     setIsSaving(false);
   };
 
-  if (!posts) {
+  if (!hasLoaded) {
     return (
       <div className="space-y-2">
         {[1, 2, 3].map((i) => (
@@ -133,7 +163,7 @@ export default function UserPost() {
     );
   }
 
-  if (posts.length === 0) {
+  if (posts.length === 0 && !searchTerm && status === "Exhausted") {
     return <div className="paper-card rounded-3xl border border-dashed border-primary/20 bg-card/70 px-6 py-14 text-center text-muted-foreground">Your first page is waiting when you are.</div>;
   }
 
@@ -213,13 +243,21 @@ export default function UserPost() {
           </Item>
         );
       })}
-      {filteredPosts.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">No pages match “{search}”.</p>}
+      {filteredPosts.length === 0 && status !== "LoadingFirstPage" && <p className="py-10 text-center text-sm text-muted-foreground">No pages match “{search}”.</p>}
+      {status === "LoadingMore" || status === "LoadingFirstPage" ? (
+        <div role="status" aria-label="Loading more entries" className="space-y-3">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-2xl motion-reduce:animate-none" />
+          ))}
+        </div>
+      ) : null}
+      <div ref={endRef} aria-hidden="true" />
       </div>
       <Dialog open={Boolean(editingPost)} onOpenChange={(open) => !open && setEditingPost(null)}>
         <DialogContent>
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="font-display text-3xl tracking-[-0.035em]">Refine your words</DialogTitle>
-            <DialogDescription>Your day and flower will stay exactly as they are. Your feeling will refresh from your words.</DialogDescription>
+            <DialogDescription>Your day and flower stay as they are. Change the weather if the day feels different now.</DialogDescription>
           </DialogHeader>
           <form
             className="space-y-3 px-6 pb-6"
@@ -228,6 +266,7 @@ export default function UserPost() {
               void saveEdit();
             }}
           >
+            <MoodPicker value={editedMood} onChange={setEditedMood} disabled={isSaving} />
             <div
               className="grid grid-cols-2 gap-2"
               role="group"

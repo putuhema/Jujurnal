@@ -59,8 +59,18 @@ export const toggle = mutation({
       )
       .unique();
 
+    const count =
+      post.reactionCount ??
+      (
+        await ctx.db
+          .query("plantReactions")
+          .withIndex("by_postId", (q) => q.eq("postId", args.postId))
+          .collect()
+      ).length;
+
     if (existing) {
       await ctx.db.delete(existing._id);
+      await ctx.db.patch(args.postId, { reactionCount: Math.max(0, count - 1) });
       return { watered: false };
     }
 
@@ -68,6 +78,7 @@ export const toggle = mutation({
       postId: args.postId,
       userId: currentUser._id,
     });
+    await ctx.db.patch(args.postId, { reactionCount: count + 1 });
     return { watered: true };
   },
 });

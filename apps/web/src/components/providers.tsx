@@ -1,7 +1,6 @@
 "use client";
 
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { env } from "@puma-brain/env/web";
 import { ConvexReactClient } from "convex/react";
 
 import { authClient } from "@/lib/auth-client";
@@ -9,7 +8,9 @@ import { authClient } from "@/lib/auth-client";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
 
-const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
+// Validated at build time by next.config (which imports @puma-brain/env/web);
+// reading it directly keeps zod out of every page's JavaScript.
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 export default function Providers({
   children,

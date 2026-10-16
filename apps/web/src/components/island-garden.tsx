@@ -17,10 +17,14 @@ export type IslandPost = {
 };
 
 // three.js only loads once a garden is on screen.
-const GardenIslandScene = dynamic(() => import("./garden-island-scene"), {
+const loadScene = () => import("./garden-island-scene");
+const GardenIslandScene = dynamic(loadScene, {
   ssr: false,
   loading: () => <IslandGardenSkeleton />,
 });
+
+// Call as soon as a garden is about to load, so the 3D code downloads alongside its data.
+export const preloadIslandGarden = () => void loadScene();
 
 export const IslandGarden = ({ posts, seed }: { posts: IslandPost[]; seed?: string }) => (
   // Each gardener's island is grown from their own seed, and each journal grows a plant from its id.

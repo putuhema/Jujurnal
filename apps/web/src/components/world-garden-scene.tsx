@@ -13,10 +13,11 @@ import {
   type RefObject,
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Globe, History, Map as MapIcon, Minus, Pause, Play, Plus, RotateCcw, RotateCw, Sprout, X } from "lucide-react";
+import { Globe, History, Map as MapIcon, Minus, Pause, Play, Plus, RotateCcw, RotateCw, SlidersHorizontal, Sprout, X } from "lucide-react";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { getCalendarDate } from "@/lib/calendar-date";
+import { cn, glassSurface } from "@/lib/utils";
 import { createPlant, getPlantGrowth, type GardenLayout, type PlantModel } from "@/lib/garden-procedural";
 import {
   applyWorldView,
@@ -33,14 +34,16 @@ import {
 import { plantPointer, plantPointerStrength } from "@/lib/plant-material";
 import { usePrefersReducedMotion } from "@/lib/use-reduced-motion";
 import { createWorldMaterial, worldMaterials, worldUniforms } from "@/lib/world-material";
-import { getJournalAriaLabel, moodLabels } from "./garden-flower";
+import { getJournalAriaLabel } from "./garden-flower";
 import { JournalPanel } from "./journal-panel";
 import { playGardenSound } from "@/lib/garden-sounds";
 import { GardenPlant } from "./garden-three";
 import type { IslandPost } from "./island-garden";
 import { Slider } from "./ui/slider";
 
-export type WorldGardenEntry = { userId: string; name: string; posts: IslandPost[] };
+// The world only carries what it draws; a journal's words arrive when it's opened.
+export type WorldPost = Omit<IslandPost, "body"> & { body?: string };
+export type WorldGardenEntry = { userId: string; name: string; posts: WorldPost[] };
 export type WaterResult = "watered" | "already" | "signedOut" | "unavailable";
 
 type Placement = {
@@ -81,6 +84,9 @@ const buzz = (pattern: number | number[] = 12) => navigator.vibrate?.(pattern);
 const READING = { zoom: 0.24, dim: 0.55, offsetWide: { x: -0.17, y: 0.1 }, offsetNarrow: { x: 0, y: -0.14 } };
 const SUN_OFFSET = new THREE.Vector3(-4, 10, 6);
 const SHADOW_MAP_SIZE = { fine: 2048, coarse: 1024 };
+// Phones are narrow, so a whole island fitted edge to edge looks small: frame
+// it tighter and let the island's rim run off the sides.
+const NARROW_GARDEN_FRAME = 0.5;
 // The sun's frame of reference, for snapping shadows to whole shadow-map texels.
 const sunBasis = new THREE.Matrix4().lookAt(SUN_OFFSET, new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
 const sunBasisInverse = sunBasis.clone().invert();
@@ -190,7 +196,7 @@ class PieceCache {
   }
 }
 
-const sortByTime = (posts: IslandPost[]) => [...posts].sort((a, b) => a._creationTime - b._creationTime);
+const sortByTime = (posts: WorldPost[]) => [...posts].sort((a, b) => a._creationTime - b._creationTime);
 
 function* buildOtherPiece(placement: Placement, now: number): PieceJob {
   const posts = sortByTime(placement.garden.posts);
@@ -202,13 +208,13 @@ function* buildOtherPiece(placement: Placement, now: number): PieceJob {
 
 // Plant models keyed by everything that shapes them, so adding one journal
 // grows one new plant instead of regenerating the whole garden.
-const usePlantModels = (posts: IslandPost[], detail = 1) => {
+const usePlantModels = (posts: WorldPost[], detail = 1) => {
   const cache = useRef(new Map<string, PlantModel>());
   const models = useMemo(() => {
     const next = new Map<string, PlantModel>();
     const list = posts.map((post) => {
       const key = `${post._id}:${post.mood}:${post.reactionCount ?? 0}:${detail}`;
-      const model = cache.current.get(key) ?? next.get(key) ?? createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, detail });
+      const model = cache.current.get(key) ?? next.get(key) ?? createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, detail });
       next.set(key, model);
       return model;
     });
@@ -223,7 +229,7 @@ const usePlantModels = (posts: IslandPost[], detail = 1) => {
   return models;
 };
 
-const dayOfMonth = (post: IslandPost) => Number(getCalendarDate(post._creationTime, post.entryDate).date.slice(8, 10));
+const dayOfMonth = (post: WorldPost) => Number(getCalendarDate(post._creationTime, post.entryDate).date.slice(8, 10));
 
 // ---------------------------------------------------------------------------
 // Scene pieces
@@ -292,7 +298,7 @@ const VisitedPiece = ({
   onGone,
 }: {
   layout: GardenLayout;
-  posts: IslandPost[];
+  posts: WorldPost[];
   models: PlantModel[];
   gray: RefObject<number>;
   leaving: boolean;
@@ -407,7 +413,7 @@ const SeedDrop = ({ position }: { position: THREE.Vector3 }) => {
   );
 };
 
-type WaterEffect = { id: number; post: IslandPost; plot: THREE.Vector3; model: PlantModel };
+type WaterEffect = { id: number; post: WorldPost; plot: THREE.Vector3; model: PlantModel };
 
 // A droplet falls on a neighbour's flower, splashes, and the flower blooms in
 // colour for a moment before settling back to gray.
@@ -629,12 +635,6 @@ const projectPoint = (camera: THREE.Camera, x: number, y: number, z: number) => 
   return { left: (point.x + 1) * 50, top: (1 - point.y) * 50, depth: point.z };
 };
 
-const previewLine = (post: IslandPost) => {
-  if (post.visibility === "private") return "Private journal";
-  const line = post.body.split("\n").find((text) => text.trim()) ?? "";
-  return line.length > 72 ? `${line.slice(0, 70).trimEnd()}…` : line;
-};
-
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const raycaster = new THREE.Raycaster();
 
@@ -666,6 +666,7 @@ export default function WorldGardenScene({
   const [isDragging, setIsDragging] = useState(false);
   const [planting, setPlanting] = useState<{ postId: string; key: number } | null>(null);
   const [replay, setReplay] = useState<{ day: number; playing: boolean } | null>(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [waterEffects, setWaterEffects] = useState<WaterEffect[]>([]);
   // The journal being read in the side panel.
   const [focusPostId, setFocusPostId] = useState<string | null>(null);
@@ -782,14 +783,19 @@ export default function WorldGardenScene({
 
   // --- Camera framing ---
   const home = mine?.center ?? placements[0]?.center ?? new THREE.Vector3();
+  const isWide = (size?.width ?? 1024) >= 640;
+  const gardenFrame = isWide ? 1 : NARROW_GARDEN_FRAME;
   const soloWidth = myLayout ? pieceFrameWidth(myLayout, home, aspect) : PIECE_SIZE * 1.8 * Math.max(1, 1 / aspect);
   const visitWidth = visitLayout && visit ? pieceFrameWidth(visitLayout, visit.placement.center, aspect) : soloWidth;
   const maxWorldWidth = coarsePointer ? MAX_WORLD_WIDTH.coarse : MAX_WORLD_WIDTH.fine;
   const worldWidth = Math.min(soloWidth * worldZoom, maxWorldWidth);
   const baseWidth =
-    mode === "garden" ? soloWidth * (plantingPlot ? PLANTING.zoom : gardenZoom) : mode === "visit" ? visitWidth * gardenZoom : worldWidth;
+    mode === "garden"
+      ? soloWidth * gardenFrame * (plantingPlot ? PLANTING.zoom : gardenZoom)
+      : mode === "visit"
+        ? visitWidth * gardenFrame * gardenZoom
+        : worldWidth;
   const goalWidth = reading?.plot ? (mode === "visit" ? visitWidth : soloWidth) * READING.zoom : baseWidth;
-  const isWide = (size?.width ?? 1024) >= 640;
 
   const goal = useRef<WorldView>({ x: home.x, z: home.z, angle: 0, width: goalWidth });
   const current = useRef<WorldView>({ ...goal.current });
@@ -852,7 +858,7 @@ export default function WorldGardenScene({
   // Zoom whatever you're looking at: the world, or the garden you're in (not while reading).
   const zoomBy = (factor: number) => {
     if (mode === "world") zoomWorld(factor);
-    else if (!focusPostId) setGardenZoom((zoom) => Math.min(Math.max(zoom * factor, GARDEN_ZOOM.min), GARDEN_ZOOM.max));
+    else if (!focusPostId) setGardenZoom((zoom) => Math.min(Math.max(zoom * factor, GARDEN_ZOOM.min), GARDEN_ZOOM.max / gardenFrame));
   };
 
   const turnBy = (delta: number) => {
@@ -917,7 +923,7 @@ export default function WorldGardenScene({
       else if (result === "unavailable") toast("This flower can't be watered.");
       else {
         buzz([10, 40, 18]);
-        const model = createPlant(post._id, { mood: post.mood, waterings: (post.reactionCount ?? 0) + 1, detail: 0.35 });
+        const model = createPlant(post._id, { mood: post.mood, waterings: (post.reactionCount ?? 0) + 1, plantedAt: post._creationTime, detail: 0.35 });
         setWaterEffects((effects) => [...effects, { id: Date.now() + Math.random(), post, plot: new THREE.Vector3(plot.x, plot.y, plot.z), model }]);
         invalidate.current?.();
       }
@@ -1064,10 +1070,8 @@ export default function WorldGardenScene({
   const screenRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).setY(0).normalize().multiplyScalar(0.5);
 
   const newestPostId = myPosts.at(-1)?._id;
-  const isShown = (post: IslandPost) => !replay || dayOfMonth(post) <= replay.day;
-  const shownCount = replay ? myPosts.filter(isShown).length : myPosts.length;
+  const isShown = (post: WorldPost) => !replay || dayOfMonth(post) <= replay.day;
   const monthLabel = new Date(now).toLocaleString(undefined, { month: "long" });
-  const visitedName = visit?.placement.garden.name;
 
   return (
     <div
@@ -1079,7 +1083,7 @@ export default function WorldGardenScene({
           ? "Garden world. Arrow keys pan, Q and E rotate, plus and minus zoom, Escape returns to your garden."
           : "Your garden. Left and right arrows or Q and E rotate."
       }
-      className={`relative -mx-4 -mb-32 h-[calc(100svh-4.85rem)] w-[calc(100%+2rem)] touch-none overflow-hidden select-none outline-none focus-visible:ring-2 focus-visible:ring-ring sm:mx-0 sm:mb-0 sm:h-[clamp(26rem,calc(100svh-9rem),56rem)] sm:w-full sm:rounded-3xl ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+      className={`relative isolate -mx-4 -mb-32 h-[calc(100svh-6rem)] w-[calc(100%+2rem)] touch-none overflow-hidden select-none outline-none focus-visible:ring-2 focus-visible:ring-ring sm:mx-0 sm:mb-0 sm:h-[clamp(26rem,calc(100svh-9rem),56rem)] sm:w-full sm:rounded-3xl ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endPointer}
@@ -1244,70 +1248,34 @@ export default function WorldGardenScene({
             const top = projectPoint(camera, plot.x, plot.y + height, plot.z);
             const left = projectPoint(camera, plot.x - screenRight.x, plot.y, plot.z - screenRight.z);
             const right = projectPoint(camera, plot.x + screenRight.x, plot.y, plot.z + screenRight.z);
-            const showPreview = activePostId === post._id && focusPostId !== post._id;
             const isPrivate = post.visibility === "private";
             return (
-              <div key={post._id}>
-                <button
-                  type="button"
-                  aria-label={isPrivate ? "Open private journal" : getJournalAriaLabel(mode === "garden" && post._id === newestPostId, post.mood)}
-                  aria-pressed={focusPostId === post._id}
-                  className="absolute -translate-x-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onPointerEnter={() => setActivePostId(post._id)}
-                  onPointerLeave={() => setActivePostId((active) => (active === post._id ? null : active))}
-                  onFocus={() => setActivePostId(post._id)}
-                  onBlur={() => setActivePostId((active) => (active === post._id ? null : active))}
-                  onClick={() => {
-                    playGardenSound("click");
-                    setFocusPostId((current) => (current === post._id ? null : post._id));
-                  }}
-                  style={{
-                    left: `${base.left}%`,
-                    top: `${top.top}%`,
-                    width: `${Math.abs(right.left - left.left) * 0.75}%`,
-                    height: `${Math.max(base.top - top.top, 4)}%`,
-                    // Plants nearer the camera sit on top so overlapping hit areas match what you see.
-                    zIndex: Math.round((1 - base.depth) * 500) + 10,
-                  }}
-                />
-                {showPreview ? (
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute z-[1500] w-max max-w-56 -translate-x-1/2 -translate-y-full rounded-xl border border-border/60 bg-card/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-95"
-                    style={{ left: `${base.left}%`, top: `calc(${top.top}% - 0.5rem)` }}
-                  >
-                    <p className="font-semibold text-primary">{moodLabels[post.mood]}</p>
-                    <p className="mt-0.5 text-muted-foreground">{previewLine(post)}</p>
-                  </div>
-                ) : null}
-              </div>
+              <button
+                key={post._id}
+                type="button"
+                aria-label={isPrivate ? "Open private journal" : getJournalAriaLabel(mode === "garden" && post._id === newestPostId, post.mood)}
+                aria-pressed={focusPostId === post._id}
+                className="absolute -translate-x-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onPointerEnter={() => setActivePostId(post._id)}
+                onPointerLeave={() => setActivePostId((active) => (active === post._id ? null : active))}
+                onFocus={() => setActivePostId(post._id)}
+                onBlur={() => setActivePostId((active) => (active === post._id ? null : active))}
+                onClick={() => {
+                  playGardenSound("click");
+                  setFocusPostId((current) => (current === post._id ? null : post._id));
+                }}
+                style={{
+                  left: `${base.left}%`,
+                  top: `${top.top}%`,
+                  width: `${Math.abs(right.left - left.left) * 0.75}%`,
+                  height: `${Math.max(base.top - top.top, 4)}%`,
+                  // Plants nearer the camera sit on top so overlapping hit areas match what you see.
+                  zIndex: Math.round((1 - base.depth) * 500) + 10,
+                }}
+              />
             );
           })
         : null}
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[2000] flex items-start justify-between gap-4 p-4 sm:p-6">
-        <div>
-          <p className="board-eyebrow text-xs font-bold uppercase tracking-[0.16em] text-primary">
-            {mode === "garden" ? `Your garden · ${monthLabel}` : mode === "visit" ? `Visiting · ${monthLabel}` : "The garden world"}
-          </p>
-          <p className="mt-1 font-display text-2xl tracking-[-0.02em] sm:text-3xl">
-            {mode === "garden"
-              ? `${shownCount} ${shownCount === 1 ? "flower" : "flowers"}`
-              : mode === "visit"
-                ? `${visitedName}'s garden`
-                : `${placements.length} ${placements.length === 1 ? "garden" : "gardens"} this month`}
-          </p>
-          {mode === "garden" && myPosts.length === 0 ? (
-            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Write today's journal to plant your first flower.</p>
-          ) : null}
-          {mode === "world" ? (
-            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Tap a flower to water it · double-click a garden to visit</p>
-          ) : null}
-          {mode === "visit" ? (
-            <p className="mt-1 max-w-xs text-sm text-muted-foreground">Open a flower to read their journal and water it.</p>
-          ) : null}
-        </div>
-      </div>
 
       {reading && readable ? (
         <JournalPanel
@@ -1326,7 +1294,7 @@ export default function WorldGardenScene({
       ) : null}
 
       {selected && mode === "world" ? (
-        <div data-world-control className="absolute inset-x-3 bottom-[calc(10.5rem+env(safe-area-inset-bottom))] z-[2000] rounded-2xl border border-border/70 bg-card/95 p-4 shadow-lg backdrop-blur-sm sm:inset-x-auto sm:bottom-6 sm:left-4 sm:w-64">
+        <div data-world-control className="absolute left-3 right-[4.5rem] bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] rounded-2xl border border-border/70 bg-card/95 p-4 shadow-lg backdrop-blur-sm sm:right-auto sm:bottom-6 sm:left-4 sm:w-64">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="font-display text-lg leading-tight">{selected.garden.name}'s garden</p>
@@ -1358,47 +1326,64 @@ export default function WorldGardenScene({
         </div>
       ) : null}
 
+      {replay && mode === "garden" ? (
+        <div
+          data-world-control
+          className={cn(
+            "absolute left-3 right-[4.5rem] bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] flex items-center gap-3 rounded-full py-1 pr-4 pl-1 sm:right-auto sm:bottom-6 sm:left-1/2 sm:w-[min(28rem,calc(100%-10rem))] sm:-translate-x-1/2",
+            glassSurface,
+            isReading && "hidden sm:flex",
+          )}
+        >
+          <ControlButton
+            label={replay.playing ? "Pause replay" : "Play replay"}
+            onClick={() => setReplay((state) => state && { day: state.playing || state.day < lastDay ? state.day : 0, playing: !state.playing })}
+          >
+            {replay.playing ? <Pause className="size-4" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}
+          </ControlButton>
+          <Slider
+            aria-label="Day of the month"
+            value={[replay.day]}
+            min={0}
+            max={lastDay}
+            step={1}
+            onValueChange={(value) => setReplay({ day: Array.isArray(value) ? value[0] : value, playing: false })}
+          />
+          <span className="w-16 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
+            {replay.day === 0 ? "Start" : `${monthLabel.slice(0, 3)} ${replay.day}`}
+          </span>
+          <ControlButton label="Close replay" onClick={() => setReplay(null)}>
+            <X className="size-4" aria-hidden="true" />
+          </ControlButton>
+        </div>
+      ) : null}
+
+      {/* Tools tuck behind one button in the bottom-right corner, above the bottom navigation. */}
       <div
         data-world-control
-        className={`pointer-events-none absolute inset-x-0 bottom-0 z-[2000] flex-col items-center gap-2 px-3 pt-4 pb-[calc(6.25rem+env(safe-area-inset-bottom))] sm:p-6 ${isReading ? "hidden sm:flex sm:pr-[24rem]" : "flex"}`}
+        className={cn(
+          "absolute right-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] flex flex-col items-center gap-2 sm:right-6 sm:bottom-6",
+          isReading && "hidden sm:flex sm:right-[24rem]",
+        )}
       >
-        {replay && mode === "garden" ? (
-          <div className="pointer-events-auto flex w-[min(28rem,100%)] items-center gap-3 rounded-full bg-background/80 py-1.5 pr-4 pl-1.5 shadow-sm backdrop-blur-sm">
-            <ControlButton
-              label={replay.playing ? "Pause replay" : "Play replay"}
-              onClick={() => setReplay((state) => state && { day: state.playing || state.day < lastDay ? state.day : 0, playing: !state.playing })}
-            >
-              {replay.playing ? <Pause className="size-4" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}
-            </ControlButton>
-            <Slider
-              aria-label="Day of the month"
-              value={[replay.day]}
-              min={0}
-              max={lastDay}
-              step={1}
-              onValueChange={(value) => setReplay({ day: Array.isArray(value) ? value[0] : value, playing: false })}
-            />
-            <span className="w-16 shrink-0 text-right text-xs font-medium tabular-nums text-muted-foreground">
-              {replay.day === 0 ? "Start" : `${monthLabel.slice(0, 3)} ${replay.day}`}
-            </span>
-            <ControlButton label="Close replay" onClick={() => setReplay(null)}>
-              <X className="size-4" aria-hidden="true" />
-            </ControlButton>
-          </div>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {mode === "visit" ? (
-            <PrimaryButton onClick={() => goTo("world")}>
-              <Globe className="size-4" aria-hidden="true" /> Back to the world
-            </PrimaryButton>
-          ) : me ? (
-            <PrimaryButton onClick={() => goTo(mode === "garden" ? "world" : "garden")}>
-              {mode === "garden" ? <Globe className="size-4" aria-hidden="true" /> : <Sprout className="size-4" aria-hidden="true" />}
-              {mode === "garden" ? "Explore the world" : "Back to my garden"}
-            </PrimaryButton>
-          ) : null}
-          <div className="pointer-events-auto flex gap-1 rounded-full bg-background/75 p-1 shadow-sm backdrop-blur-sm">
+        {toolsOpen ? (
+          <div
+            id="garden-tools"
+            className={cn(
+              "flex origin-bottom flex-col items-center gap-0.5 rounded-full p-1 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:slide-in-from-bottom-2",
+              glassSurface,
+            )}
+          >
+            {mode === "visit" ? (
+              <PrimaryButton label="Back to the world" onClick={() => goTo("world")}>
+                <Globe className="size-[18px]" aria-hidden="true" />
+              </PrimaryButton>
+            ) : me ? (
+              <PrimaryButton label={mode === "garden" ? "Explore the world" : "Back to my garden"} onClick={() => goTo(mode === "garden" ? "world" : "garden")}>
+                {mode === "garden" ? <Globe className="size-[18px]" aria-hidden="true" /> : <Sprout className="size-[18px]" aria-hidden="true" />}
+              </PrimaryButton>
+            ) : null}
+            {mode === "visit" || me ? <span aria-hidden="true" className="my-1 h-px w-5 bg-border" /> : null}
             <ControlButton label="Rotate left (Q)" onClick={() => turnBy(-BUTTON_TURN)}>
               <RotateCcw className="size-4" aria-hidden="true" />
             </ControlButton>
@@ -1412,26 +1397,42 @@ export default function WorldGardenScene({
             ) : null}
             {mode === "world" ? (
               <>
-                <ControlButton label="Zoom out (−)" disabled={worldWidth >= maxWorldWidth} onClick={() => zoomWorld(WORLD_ZOOM.step)}>
-                  <Minus className="size-4" aria-hidden="true" />
-                </ControlButton>
                 <ControlButton label="Zoom in (+)" disabled={worldZoom <= WORLD_ZOOM.min} onClick={() => zoomWorld(1 / WORLD_ZOOM.step)}>
                   <Plus className="size-4" aria-hidden="true" />
+                </ControlButton>
+                <ControlButton label="Zoom out (−)" disabled={worldWidth >= maxWorldWidth} onClick={() => zoomWorld(WORLD_ZOOM.step)}>
+                  <Minus className="size-4" aria-hidden="true" />
                 </ControlButton>
               </>
             ) : null}
           </div>
-        </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setToolsOpen((open) => !open)}
+          aria-label={toolsOpen ? "Close tools" : "Open tools"}
+          aria-expanded={toolsOpen}
+          aria-controls="garden-tools"
+          title={toolsOpen ? "Close tools" : "Tools"}
+          className={cn(
+            "flex size-12 cursor-pointer items-center justify-center rounded-full text-foreground/80 transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+            glassSurface,
+          )}
+        >
+          {toolsOpen ? <X className="size-5" aria-hidden="true" /> : <SlidersHorizontal className="size-5" aria-hidden="true" />}
+        </button>
       </div>
     </div>
   );
 }
 
-const PrimaryButton = ({ onClick, children }: { onClick: () => void; children: ReactNode }) => (
+const PrimaryButton = ({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) => (
   <button
     type="button"
     onClick={onClick}
-    className="pointer-events-auto inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-md transition-transform active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    aria-label={label}
+    title={label}
+    className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
   >
     {children}
   </button>
@@ -1454,7 +1455,7 @@ const ControlButton = ({
     disabled={disabled}
     aria-label={label}
     title={label}
-    className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground/80 hover:bg-muted sm:size-8 focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-40"
+    className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground/80 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-40"
   >
     {children}
   </button>

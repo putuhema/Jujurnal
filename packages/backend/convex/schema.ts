@@ -37,9 +37,15 @@ export default defineSchema({
       v.union(v.literal("public"), v.literal("private"))
     ),
     year: v.number(),
+    // Kept in step with plantReactions by reactions.toggle, so lists don't
+    // have to count reactions per post. Missing on posts from before it existed.
+    reactionCount: v.optional(v.number()),
   })
     .index("by_authorId", ["userId"])
-    .index("by_year", ["year"]),
+    .index("by_authorId_entryDate", ["userId", "entryDate"])
+    .index("by_entryDate", ["entryDate"])
+    .index("by_year", ["year"])
+    .searchIndex("search_body", { searchField: "body", filterFields: ["userId"] }),
   plantReactions: defineTable({
     postId: v.id("posts"),
     userId: v.string(),

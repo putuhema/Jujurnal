@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { applyMatrix, boundingSphere } from "./fast-geometry";
 import {
   buildIsland,
   createPlant,
@@ -152,16 +153,19 @@ export function* growPiecePlants(posts: WorldPost[], layout: GardenLayout, now: 
   for (let index = 0; index < count; index++) {
     const post = posts[index];
     const plot = layout.plots[index];
-    const { geometry } = createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, detail: 0.35 });
+    const { geometry } = createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, detail: 0.35 });
+    // Merged into the piece below, which gets its own bounds.
+    geometry.boundingBox = null;
+    geometry.boundingSphere = null;
     const growth = getPlantGrowth(post._creationTime, now);
-    geometry.applyMatrix4(matrix.makeScale(growth, growth, growth).setPosition(plot.x, plot.y, plot.z));
+    applyMatrix(geometry, matrix.makeScale(growth, growth, growth).setPosition(plot.x, plot.y, plot.z));
     parts.push(geometry);
     yield undefined;
   }
   if (!parts.length) return null;
   const merged = mergeGeometries(parts)!;
   for (const part of parts) part.dispose();
-  merged.computeBoundingSphere();
+  boundingSphere(merged);
   return merged;
 }
 

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { applyMatrix, boundingBox, boundingSphere, flatNormals, smoothNormals } from "./fast-geometry";
 
 // Everything here is deterministic: the same seed always grows the same plant
 // or island, so a journal keeps its look across visits and devices.
@@ -91,7 +92,7 @@ const part = (
 ) => {
   if (smooth) {
     if (roughen) wobble(source, roughen, seed);
-    source.computeVertexNormals();
+    smoothNormals(source);
   }
   const geometry = source.index ? source.toNonIndexed() : source;
   if (geometry !== source) source.dispose();
@@ -105,14 +106,14 @@ const part = (
   vector.set(...(transform.position ?? [0, 0, 0]));
 
   // Fake ambient occlusion: darken the underside of each part.
-  geometry.computeBoundingBox();
-  const { min, max } = geometry.boundingBox!;
+  const { min, max } = boundingBox(geometry);
   const span = max.y - min.y || 1;
   const position = geometry.attributes.position;
+  const positions = position.array as Float32Array;
   const colors = new Float32Array(position.count * 3);
   const blended = new THREE.Color();
   for (let index = 0; index < position.count; index++) {
-    const height = (position.getY(index) - min.y) / span;
+    const height = (positions[index * 3 + 1] - min.y) / span;
     const light = 1 - shade + shade * height;
     blended.copy(color);
     if (tint) blended.lerp(tint, height);
@@ -121,16 +122,16 @@ const part = (
     colors[index * 3 + 2] = blended.b * light;
   }
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.applyMatrix4(matrix.compose(vector, quaternion, scaleVector));
-  if (!smooth) geometry.computeVertexNormals();
+  applyMatrix(geometry, matrix.compose(vector, quaternion, scaleVector));
+  if (!smooth) flatNormals(geometry);
   return geometry;
 };
 
 const merge = (parts: THREE.BufferGeometry[]) => {
   const geometry = mergeGeometries(parts)!;
   for (const piece of parts) piece.dispose();
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
+  boundingBox(geometry);
+  // The bounding sphere is computed once a mesh is in its final place (or by three on first render).
   return geometry;
 };
 
@@ -171,9 +172,22 @@ const petalFamilies = [
   { name: "peach", hue: [18, 28], saturation: [0.75, 0.85], lightness: [0.76, 0.82] },
 ] as const;
 
+// Rarer colours, only ever drawn from the variety stream (see growPlant), so
+// adding them doesn't shift the colours of plants that already exist.
+const rareFamilies = [
+  { name: "burgundy", hue: [340, 352], saturation: [0.55, 0.68], lightness: [0.3, 0.38] },
+  { name: "cream", hue: [42, 52], saturation: [0.45, 0.6], lightness: [0.86, 0.9] },
+  { name: "apricot", hue: [28, 36], saturation: [0.8, 0.9], lightness: [0.7, 0.76] },
+  { name: "sky", hue: [195, 205], saturation: [0.6, 0.72], lightness: [0.7, 0.78] },
+  { name: "lime", hue: [72, 84], saturation: [0.5, 0.62], lightness: [0.62, 0.7] },
+  { name: "fuchsia", hue: [300, 310], saturation: [0.7, 0.8], lightness: [0.5, 0.58] },
+] as const;
+
 const blossomHues = [0, 12, 45, 52, 200, 285, 330, 345] as const;
 
-const createPalette = (random: Random, desaturation: number, family = random.pick(petalFamilies)): Palette => {
+type ColorFamily = { hue: readonly [number, number]; saturation: readonly [number, number]; lightness: readonly [number, number] };
+
+const createPalette = (random: Random, desaturation: number, family: ColorFamily = random.pick(petalFamilies)): Palette => {
   const hue = random.range(family.hue[0], family.hue[1]);
   const saturation = random.range(family.saturation[0], family.saturation[1]);
   const lightness = random.range(family.lightness[0], family.lightness[1]);
@@ -259,8 +273,11 @@ const bladeSurface = ({
 
 // Turn a blade so it points outward at `angle` around the y axis, raised by
 // `elevation` radians above horizontal, starting `offset` from the center.
-const placeBlade = (geometry: THREE.BufferGeometry, angle: number, elevation: number, offset = 0) =>
-  geometry.rotateX(Math.PI / 2 - elevation).translate(0, 0, offset).rotateY(angle);
+const placeBlade = (geometry: THREE.BufferGeometry, angle: number, elevation: number, offset = 0) => {
+  applyMatrix(geometry, matrix.makeRotationX(Math.PI / 2 - elevation));
+  applyMatrix(geometry, matrix.makeTranslation(0, 0, offset));
+  return applyMatrix(geometry, matrix.makeRotationY(angle));
+};
 
 const blade = (options: SurfaceOptions, color: THREE.Color, tint: THREE.Color, angle: number, elevation: number, offset = 0) =>
   placeBlade(part(bladeSurface(options), color, {}, { smooth: true, shade: 0.12, tint }), angle, elevation, offset);
@@ -270,7 +287,7 @@ const up = new THREE.Vector3(0, 1, 0);
 // Orient head parts (built facing +y) along a stem's tip direction.
 const mountHead = (parts: THREE.BufferGeometry[], position: THREE.Vector3, direction: THREE.Vector3) => {
   matrix.compose(position, quaternion.setFromUnitVectors(up, direction.clone().normalize()), scaleVector.set(1, 1, 1));
-  for (const piece of parts) piece.applyMatrix4(matrix);
+  for (const piece of parts) applyMatrix(piece, matrix);
   return parts;
 };
 
@@ -289,30 +306,47 @@ const dome = (radius: number, flatten: number, color: THREE.Color, position: THR
 const bead = (radius: number, color: THREE.Color, position: [number, number, number] | THREE.Vector3) =>
   part(new THREE.SphereGeometry(radius, resolution(7, 4), resolution(5, 3)), color, { position: Array.isArray(position) ? position : [position.x, position.y, position.z] }, { smooth: true, shade: 0.25 });
 
-type Head = (random: Random, palette: Palette) => THREE.BufferGeometry[];
+// Per-variant tweaks to a head's shape. Empty for a species' classic look, which
+// must stay exactly as it was so existing gardens don't change.
+type HeadStyle = Partial<Record<"layers" | "petals" | "ruffle" | "pointy" | "open" | "curl" | "flat" | "lacecap" | "bracts" | "double", number>>;
+
+type Head = (random: Random, palette: Palette, style: HeadStyle) => THREE.BufferGeometry[];
 
 const ring = (count: number, random: Random, jitter = 0.12) =>
   Array.from({ length: count }, (_, index) => (index / count) * Math.PI * 2 + random.range(-jitter, jitter));
 
 const heads = {
-  daisy: (random, palette) => {
+  daisy: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
-    const layers = random.chance(0.35) ? 2 : 1;
+    const rolledLayers = random.chance(0.35) ? 2 : 1;
+    const layers = style.layers ?? rolledLayers;
     const count = random.int(11, 16);
     const length = random.range(0.11, 0.15);
     const width = random.range(0.035, 0.05);
     for (let layer = 0; layer < layers; layer++) {
       for (const angle of ring(count, random, 0.08)) {
-        parts.push(blade({ length: length * (1 - layer * 0.2), width, widest: 0.62, pointy: 0.6, cup: 0.35, curl: random.range(-0.05, 0.12), ruffle: 0.05 }, palette.petalBase, palette.petal, angle + layer * (Math.PI / count), random.range(0.08, 0.22) + layer * 0.3, 0.025));
+        parts.push(blade({ length: length * (1 - layer * (style.layers ? 0.14 : 0.2)), width, widest: 0.62, pointy: 0.6, cup: 0.35, curl: random.range(-0.05, 0.12), ruffle: 0.05 }, palette.petalBase, palette.petal, angle + layer * (Math.PI / count), random.range(0.08, 0.22) + layer * (style.layers ? 0.42 : 0.3), 0.025));
       }
     }
     parts.push(dome(0.04, 0.7, palette.center));
     return parts;
   },
-  sunflower: (random, palette) => {
+  sunflower: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
     const count = random.int(16, 22);
-    const gold = palette.petal.clone().lerp(hsl(46, 0.95, 0.56), 0.75);
+    const gold = style.flat ? palette.petal.clone() : palette.petal.clone().lerp(hsl(46, 0.95, 0.56), 0.75);
+    if (style.double) {
+      // Teddy bear: a shaggy ball of short petals, no disc showing.
+      const layers = detail < 1 ? 4 : 7;
+      for (let layer = 0; layer < layers; layer++) {
+        const t = layer / (layers - 1);
+        for (const angle of ring(Math.round(count * (1 - t * 0.45)), random, 0.25)) {
+          parts.push(blade({ length: 0.11 - t * 0.035, width: 0.04, widest: 0.5, pointy: 1.1, cup: 0.6, curl: 0.18, ruffle: 0.2 }, gold.clone().multiplyScalar(0.8), gold, angle + layer * 0.37, -0.35 + t * 1.85, 0.04 * (1 - t * 0.6)));
+        }
+      }
+      parts.push(bead(0.065, gold.clone().multiplyScalar(0.75), [0, 0.045, 0]));
+      return parts;
+    }
     for (let layer = 0; layer < 2; layer++) {
       for (const angle of ring(count, random, 0.05)) {
         parts.push(blade({ length: random.range(0.1, 0.13), width: 0.045, widest: 0.45, pointy: 1.3, cup: 0.4, curl: random.range(-0.15, 0.05) }, gold.clone().multiplyScalar(0.8), gold, angle + layer * (Math.PI / count), 0.1 + layer * 0.25, 0.07));
@@ -322,20 +356,22 @@ const heads = {
     parts.push(dome(0.075, 0.35, hsl(28, 0.55, 0.24), [0, 0.015, 0]));
     return parts;
   },
-  tulip: (random, palette) => {
+  tulip: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
     const length = random.range(0.15, 0.19);
-    const width = random.range(0.1, 0.12);
-    const open = random.range(1.05, 1.32);
+    const width = random.range(0.1, 0.12) * (style.pointy ? 0.75 : 1);
+    const open = random.range(1.05, 1.32) - (style.open ?? 0);
     for (let layer = 0; layer < 2; layer++) {
       for (const angle of ring(3, random, 0.08)) {
-        parts.push(blade({ length: length * (1 - layer * 0.06), width, widest: 0.6, pointy: 0.75, cup: 1, curl: random.range(0.08, 0.22) }, palette.petalBase, palette.petalTip, angle + layer * (Math.PI / 3), open + layer * 0.08, 0.012));
+        const curl = random.range(0.08, 0.22);
+        parts.push(blade({ length: length * (1 - layer * 0.06), width, widest: 0.6, pointy: style.pointy ?? 0.75, cup: style.ruffle ? 0.75 : 1, curl: style.curl ?? curl, ruffle: style.ruffle ?? 0, columns: style.ruffle ? 12 : 6, rows: style.ruffle ? 12 : 9 }, palette.petalBase, palette.petalTip, angle + layer * (Math.PI / 3), open + layer * 0.08, 0.012));
       }
     }
     return parts;
   },
-  rose: (random, palette) => {
+  rose: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
+    const opened = style.open ?? 0;
     const layers = [
       { count: 5, length: 0.1, width: 0.12, elevation: 0.45, cup: 0.7, curl: -0.08 },
       { count: 5, length: 0.09, width: 0.105, elevation: 0.95, cup: 0.9, curl: 0.12 },
@@ -343,30 +379,37 @@ const heads = {
     ];
     layers.forEach((layer, index) => {
       for (const angle of ring(layer.count, random, 0.15)) {
-        parts.push(blade({ length: layer.length, width: layer.width, widest: 0.68, pointy: 0.4, cup: layer.cup, curl: layer.curl, ruffle: 0.06 }, palette.petalBase, index === 0 ? palette.petalTip : palette.petal, angle + index * 0.6, layer.elevation, 0.01 + (2 - index) * 0.006));
+        parts.push(blade({ length: layer.length, width: layer.width, widest: 0.68, pointy: 0.4, cup: layer.cup, curl: layer.curl - opened * 0.15, ruffle: 0.06 }, palette.petalBase, index === 0 ? palette.petalTip : palette.petal, angle + index * 0.6, layer.elevation - opened * (0.3 + index * 0.15), 0.01 + (2 - index) * 0.006));
       }
     });
     parts.push(bead(0.03, palette.petalBase, [0, 0.045, 0]));
     for (const angle of ring(5, random)) parts.push(blade({ length: 0.05, width: 0.02, pointy: 1.4, cup: 0.2, curl: -0.3 }, palette.leaf, palette.leafTip, angle + 0.3, -0.3, 0.01));
     return parts;
   },
-  poppy: (random, palette) => {
+  poppy: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
     const count = random.int(4, 5);
     for (const angle of ring(count, random)) {
       parts.push(blade({ length: random.range(0.12, 0.14), width: random.range(0.16, 0.19), widest: 0.65, pointy: 0.4, cup: 0.55, curl: 0.12, ruffle: 0.12, columns: 8 }, palette.petalBase, palette.petal, angle, random.range(0.45, 0.7), 0.006));
+    }
+    if (style.double) {
+      // Peony-flowered: a second, crumpled ring inside.
+      for (const angle of ring(count + 2, random)) {
+        parts.push(blade({ length: 0.09, width: 0.12, widest: 0.6, pointy: 0.4, cup: 0.8, curl: 0.25, ruffle: 0.22, columns: 8 }, palette.petalBase, palette.petalTip, angle + 0.4, 1.05, 0.004));
+      }
     }
     const ink = hsl(270, 0.3, 0.12);
     for (const angle of ring(12, random, 0.05)) parts.push(bead(0.009, ink, [Math.cos(angle) * 0.03, 0.03, Math.sin(angle) * 0.03]));
     parts.push(bead(0.024, hsl(95, 0.35, 0.45), [0, 0.035, 0]));
     return parts;
   },
-  lily: (random, palette) => {
+  lily: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
     const length = random.range(0.17, 0.21);
     for (let layer = 0; layer < 2; layer++) {
       for (const angle of ring(3, random, 0.1)) {
-        parts.push(blade({ length: length * (1 - layer * 0.05), width: 0.07 - layer * 0.008, widest: 0.42, pointy: 1.5, cup: 0.35, curl: random.range(-0.3, -0.18), fold: 0.15 }, palette.petal, palette.petalTip, angle + layer * (Math.PI / 3), 0.75 + layer * 0.1, 0.01));
+        const curl = random.range(-0.3, -0.18);
+        parts.push(blade({ length: length * (1 - layer * 0.05), width: 0.07 - layer * 0.008, widest: style.open ? 0.62 : 0.42, pointy: 1.5, cup: style.open ? 0.6 : 0.35, curl: style.curl ?? curl, fold: 0.15 }, palette.petal, palette.petalTip, angle + layer * (Math.PI / 3), 0.75 + (style.open ?? 0) + layer * 0.1, 0.01));
       }
     }
     for (const angle of ring(6, random, 0.2)) {
@@ -376,10 +419,25 @@ const heads = {
     }
     return parts;
   },
-  hydrangea: (random, palette) => {
+  hydrangea: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
     const radius = random.range(0.11, 0.14);
     const florets = random.int(20, 28);
+    if (style.lacecap) {
+      // Lacecap: a flat disc of tiny fertile buds ringed by a few showy florets.
+      const buds = detail < 1 ? 14 : 34;
+      for (let index = 0; index < buds; index++) {
+        const r = Math.sqrt(index / buds) * radius * 0.85;
+        const theta = index * 2.39996;
+        parts.push(bead(0.008, palette.petalBase.clone().lerp(palette.pollen, 0.25), [Math.cos(theta) * r, 0.02 + random.range(0, 0.01), Math.sin(theta) * r]));
+      }
+      for (const angle of ring(random.int(7, 9), random, 0.15)) {
+        const floret = ring(4, random, 0.1).map((petal) => blade({ length: 0.05, width: 0.05, widest: 0.6, pointy: 0.45, cup: 0.25 }, palette.petal, palette.petalTip, petal, 0.1, 0.003));
+        const at = new THREE.Vector3(Math.cos(angle) * radius, 0.015, Math.sin(angle) * radius);
+        parts.push(...mountHead(floret, at, new THREE.Vector3(Math.cos(angle) * 0.3, 1, Math.sin(angle) * 0.3)));
+      }
+      return parts;
+    }
     const normal = new THREE.Vector3();
     for (let index = 0; index < florets; index++) {
       // Fibonacci sphere, upper part only, for even floret spacing.
@@ -399,7 +457,7 @@ const heads = {
     }
     return parts;
   },
-  lavender: (random, palette) => {
+  lavender: (random, palette, style) => {
     const parts: THREE.BufferGeometry[] = [];
     const whorls = random.int(7, 10);
     for (let index = 0; index < whorls; index++) {
@@ -410,13 +468,136 @@ const heads = {
         parts.push(part(new THREE.SphereGeometry(size, resolution(6, 4), resolution(4, 3)), color, { position: [Math.cos(angle) * size * 0.9, y, Math.sin(angle) * size * 0.9], scale: [1, 1.5, 1] }, { smooth: true, shade: 0.3 }));
       }
     }
+    if (style.bracts) {
+      // Spanish lavender's "bunny ears" on top.
+      const top = whorls * 0.024;
+      for (const angle of ring(random.int(2, 3), random, 0.3)) {
+        const ear = blade({ length: 0.05, width: 0.03, widest: 0.6, pointy: 0.6, cup: 0.3, curl: -0.1 }, palette.petal, palette.petalTip, angle, 1.15);
+        parts.push(applyMatrix(ear, matrix.makeTranslation(0, top, 0)));
+      }
+    }
+    return parts;
+  },
+  cosmos: (random, palette) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const count = random.int(8, 9);
+    for (const angle of ring(count, random, 0.06)) {
+      // Broad petals with a toothed, ruffled tip.
+      parts.push(blade({ length: random.range(0.1, 0.12), width: random.range(0.065, 0.08), widest: 0.78, pointy: 0.25, cup: 0.15, curl: random.range(-0.04, 0.06), ruffle: 0.1, columns: 8 }, palette.petalBase, palette.petal, angle, random.range(0.05, 0.16), 0.018));
+    }
+    parts.push(dome(0.022, 0.8, hsl(48, 0.9, 0.52)));
+    for (const angle of ring(8, random, 0.2)) parts.push(bead(0.005, palette.pollen, [Math.cos(angle) * 0.016, 0.012, Math.sin(angle) * 0.016]));
+    return parts;
+  },
+  gerbera: (random, palette) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const count = random.int(20, 26);
+    const length = random.range(0.11, 0.13);
+    for (let layer = 0; layer < 2; layer++) {
+      for (const angle of ring(count, random, 0.04)) {
+        parts.push(blade({ length: length * (1 - layer * 0.18), width: 0.024, widest: 0.55, pointy: 0.7, cup: 0.3, curl: 0.02 }, palette.petalBase, palette.petal, angle + layer * (Math.PI / count), 0.06 + layer * 0.18, 0.045));
+      }
+    }
+    // A fringe of tiny inner petals, then a dark eye.
+    for (const angle of ring(count, random, 0.1)) parts.push(blade({ length: 0.025, width: 0.008, pointy: 1, cup: 0.2 }, palette.petalTip, palette.petalTip, angle, 0.5, 0.035));
+    parts.push(dome(0.045, 0.5, random.chance(0.5) ? hsl(30, 0.5, 0.16) : hsl(80, 0.45, 0.35)));
+    return parts;
+  },
+  bellflower: (random, palette) => {
+    const parts: THREE.BufferGeometry[] = [];
+    // A short arching spray of hanging bells.
+    const bells = random.int(3, 5);
+    for (let index = 0; index < bells; index++) {
+      const bell: THREE.BufferGeometry[] = [];
+      const size = 0.065 * (1 - index * 0.1);
+      for (const angle of ring(5, random, 0.05)) {
+        bell.push(blade({ length: size, width: size * 0.75, widest: 0.7, pointy: 1.2, cup: 0.9, curl: -0.35 }, palette.petalBase, palette.petalTip, angle, 1.25, 0.008));
+      }
+      bell.push(bead(0.006, palette.pollen, [0, 0.01, 0]));
+      const side = index % 2 ? 1 : -1;
+      const at = new THREE.Vector3(side * 0.035, -0.02 - index * 0.045, 0.01 * index);
+      // Bells face up as built; turn them to hang open-side down.
+      parts.push(...mountHead(bell, at, new THREE.Vector3(side * 0.35, -1, 0.15)));
+      parts.push(stem([new THREE.Vector3(0, -index * 0.045, 0), new THREE.Vector3(side * 0.02, -index * 0.045 + 0.01, 0), at], 0.003, palette.stem).geometry);
+    }
+    return parts;
+  },
+  allium: (random, palette) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const radius = random.range(0.07, 0.09);
+    const florets = detail < 1 ? 26 : 64;
+    const normal = new THREE.Vector3();
+    for (let index = 0; index < florets; index++) {
+      // Fibonacci sphere of star-shaped florets.
+      const y = 1 - (index / (florets - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = index * 2.39996;
+      normal.set(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+      const color = palette.petal.clone().lerp(palette.petalTip, (y + 1) / 2);
+      const at = normal.clone().multiplyScalar(radius).setY(normal.y * radius + radius);
+      if (detail < 1) {
+        parts.push(bead(0.011, color, at));
+        continue;
+      }
+      // Florets are tiny: a few quads per petal and no centre bead is plenty.
+      const star = ring(3, random, 0.1).map((angle) => blade({ length: 0.018, width: 0.009, pointy: 1.2, cup: 0.3, columns: 2, rows: 3 }, color, color, angle, 0.5, 0.002));
+      parts.push(...mountHead(star, at, normal));
+    }
+    return parts;
+  },
+  calla: (random, palette) => {
+    const parts: THREE.BufferGeometry[] = [];
+    // One spathe: a flaring funnel, slit down one side, its rim drawn up into a pointed lip.
+    const height = random.range(0.13, 0.16);
+    const mouth = random.range(0.05, 0.065);
+    const steps = resolution(10, 5);
+    const profile = Array.from({ length: steps + 1 }, (_, index) => {
+      const t = index / steps;
+      return new THREE.Vector2(0.008 + mouth * t ** 1.8, t * height);
+    });
+    const funnel = new THREE.LatheGeometry(profile, resolution(18, 8), 0.35, Math.PI * 2 - 0.7);
+    const position = funnel.attributes.position.array as Float32Array;
+    const lipAngle = random.range(0, Math.PI * 2);
+    for (let index = 0; index < position.length; index += 3) {
+      const t = position[index + 1] / height;
+      const angle = Math.atan2(position[index + 2], position[index]);
+      // Pull the rim up into a tip on one side and roll it outward a little.
+      const toward = Math.max(0, Math.cos(angle - lipAngle));
+      position[index + 1] += height * 0.45 * t ** 3 * toward ** 2;
+      const roll = 1 + 0.25 * t ** 4;
+      position[index] *= roll;
+      position[index + 2] *= roll;
+    }
+    parts.push(part(funnel, palette.petalBase, {}, { smooth: true, shade: 0.25, tint: palette.petal }));
+    parts.push(stem([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, height * 0.35, 0), new THREE.Vector3(0, height * 0.65, 0.003)], 0.008, hsl(48, 0.9, 0.55)).geometry);
+    return parts;
+  },
+  iris: (random, palette) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const beard = palette.pollen.clone().lerp(hsl(40, 0.95, 0.62), 0.5);
+    for (const angle of ring(3, random, 0.05)) {
+      // Standards stand up; falls droop, each with a golden beard.
+      parts.push(blade({ length: random.range(0.11, 0.13), width: 0.065, widest: 0.62, pointy: 0.55, cup: 0.7, curl: 0.25, ruffle: 0.08 }, palette.petalBase, palette.petal, angle, 1.3, 0.008));
+      parts.push(blade({ length: random.range(0.13, 0.15), width: 0.08, widest: 0.68, pointy: 0.5, cup: 0.35, curl: -0.35, ruffle: 0.08 }, palette.petal, palette.petalTip, angle + Math.PI / 3, 0.25, 0.012));
+      parts.push(blade({ length: 0.045, width: 0.012, pointy: 1, cup: 0.4 }, beard, beard, angle + Math.PI / 3, 0.35, 0.014));
+    }
     return parts;
   },
 } satisfies Record<string, Head>;
-
 type FlowerHeadName = keyof typeof heads;
 
 type PetalFamily = (typeof petalFamilies)[number]["name"];
+
+// A named look within a species, e.g. a parrot tulip. The first variant of each
+// species is its classic look.
+type Variant = {
+  name: string;
+  weight: number;
+  style?: HeadStyle;
+  form?: Partial<Pick<FlowerForm, "stems" | "height" | "headScale" | "nod" | "spread">>;
+  // Overrides the species' colours.
+  family?: ColorFamily;
+};
 
 type FlowerForm = {
   head: FlowerHeadName;
@@ -430,6 +611,7 @@ type FlowerForm = {
   // How far a head nods toward the camera-facing side (radians).
   nod: number;
   leaves: { count: [number, number]; length: [number, number]; width: number; elevation: [number, number]; widest: number; pointy: number; on: "base" | "stem" };
+  variants?: Variant[];
 };
 
 const flowerForms = {
@@ -441,9 +623,55 @@ const flowerForms = {
   lily: { head: "lily", stems: [1, 3], height: [0.5, 0.68], spread: 0.12, stemRadius: 0.011, headScale: [1.05, 1.2], nod: 0.6, leaves: { count: [5, 8], length: [0.13, 0.18], width: 0.04, elevation: [0.3, 0.7], widest: 0.4, pointy: 1.3, on: "stem" } },
   hydrangea: { head: "hydrangea", families: ["blue", "lavender", "purple", "pink", "white", "magenta"], stems: [2, 3], height: [0.26, 0.36], spread: 0.15, stemRadius: 0.012, headScale: [1, 1.15], nod: 0.25, leaves: { count: [5, 7], length: [0.17, 0.22], width: 0.14, elevation: [0.15, 0.45], widest: 0.45, pointy: 0.95, on: "base" } },
   lavender: { head: "lavender", families: ["lavender", "purple", "blue", "pink", "white"], stems: [6, 9], height: [0.38, 0.55], spread: 0.18, stemRadius: 0.005, headScale: [1, 1.2], nod: 0.1, leaves: { count: [7, 10], length: [0.12, 0.18], width: 0.018, elevation: [0.7, 1.1], widest: 0.4, pointy: 1.2, on: "base" } },
+  cosmos: { head: "cosmos", families: ["pink", "magenta", "white", "orange", "red", "coral"], stems: [3, 5], height: [0.5, 0.72], spread: 0.18, stemRadius: 0.006, headScale: [1, 1.2], nod: 0.35, leaves: { count: [8, 12], length: [0.12, 0.18], width: 0.014, elevation: [0.4, 0.9], widest: 0.4, pointy: 1.4, on: "stem" } },
+  gerbera: { head: "gerbera", families: ["red", "coral", "pink", "orange", "yellow", "white", "peach", "magenta"], stems: [1, 3], height: [0.34, 0.46], spread: 0.12, stemRadius: 0.009, headScale: [1.1, 1.3], nod: 0.45, leaves: { count: [5, 7], length: [0.15, 0.2], width: 0.09, elevation: [0.1, 0.4], widest: 0.6, pointy: 0.8, on: "base" } },
+  bellflower: { head: "bellflower", families: ["blue", "lavender", "purple", "white", "pink"], stems: [2, 4], height: [0.36, 0.5], spread: 0.15, stemRadius: 0.006, headScale: [0.95, 1.1], nod: 0.2, leaves: { count: [4, 7], length: [0.09, 0.13], width: 0.05, elevation: [0.2, 0.6], widest: 0.4, pointy: 1.2, on: "stem" } },
+  allium: { head: "allium", families: ["purple", "lavender", "magenta", "white", "pink"], stems: [1, 3], height: [0.6, 0.85], spread: 0.12, stemRadius: 0.007, headScale: [1, 1.25], nod: 0.05, leaves: { count: [3, 5], length: [0.22, 0.3], width: 0.03, elevation: [0.3, 0.75], widest: 0.4, pointy: 1.3, on: "base" } },
+  calla: { head: "calla", families: ["white", "yellow", "pink", "orange", "purple", "red"], stems: [2, 4], height: [0.42, 0.58], spread: 0.1, stemRadius: 0.009, headScale: [1, 1.15], nod: 0.25, leaves: { count: [3, 5], length: [0.2, 0.26], width: 0.13, elevation: [0.55, 0.95], widest: 0.32, pointy: 1.5, on: "base" } },
+  iris: { head: "iris", families: ["blue", "purple", "lavender", "white", "yellow"], stems: [1, 3], height: [0.5, 0.66], spread: 0.1, stemRadius: 0.008, headScale: [1.05, 1.2], nod: 0.15, leaves: { count: [5, 7], length: [0.3, 0.4], width: 0.045, elevation: [1.1, 1.35], widest: 0.35, pointy: 1.6, on: "base" } },
 } satisfies Record<string, FlowerForm>;
 
-const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlooms: number, wilt: number) => {
+// Variants of the original species. Their first entry is the classic look.
+const speciesVariants: Partial<Record<keyof typeof flowerForms, Variant[]>> = {
+  daisy: [
+    { name: "classic", weight: 6 },
+    { name: "pompom", weight: 3, style: { layers: 4 } },
+    { name: "tall", weight: 2, form: { height: [0.5, 0.68], stems: [4, 6] } },
+  ],
+  sunflower: [
+    { name: "classic", weight: 6 },
+    { name: "teddy bear", weight: 3, style: { double: 1 }, form: { height: [0.48, 0.62], headScale: [1.15, 1.35] } },
+    { name: "velvet queen", weight: 2, style: { flat: 1 }, family: { hue: [6, 14], saturation: [0.7, 0.8], lightness: [0.34, 0.42] } },
+  ],
+  tulip: [
+    { name: "classic", weight: 6 },
+    { name: "parrot", weight: 3, style: { ruffle: 0.7, open: 0.5 } },
+    { name: "lily-flowered", weight: 3, style: { pointy: 2, curl: -0.18, open: -0.15 } },
+  ],
+  rose: [
+    { name: "classic", weight: 6 },
+    { name: "spray", weight: 3, form: { stems: [4, 6], headScale: [0.7, 0.85] } },
+    { name: "open bloom", weight: 3, style: { open: 1 } },
+  ],
+  poppy: [
+    { name: "classic", weight: 6 },
+    { name: "peony-flowered", weight: 3, style: { double: 1 } },
+  ],
+  lily: [
+    { name: "classic", weight: 6 },
+    { name: "trumpet", weight: 3, style: { open: 0.4, curl: -0.08 }, form: { nod: 0.85 } },
+  ],
+  hydrangea: [
+    { name: "mophead", weight: 6 },
+    { name: "lacecap", weight: 4, style: { lacecap: 1 } },
+  ],
+  lavender: [
+    { name: "english", weight: 6 },
+    { name: "spanish", weight: 4, style: { bracts: 1 } },
+  ],
+};
+
+const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlooms: number, wilt: number, style: HeadStyle = {}) => {
   const parts: THREE.BufferGeometry[] = [];
   const stems = Math.min(form.stems[1] + 4, random.int(form.stems[0], form.stems[1]) + extraBlooms);
   // Lean flower faces toward the viewer so heads read from the isometric camera.
@@ -465,11 +693,11 @@ const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlo
     parts.push(body.geometry);
 
     const direction = body.direction.clone().addScaledVector(towardCamera, form.nod * 0.5).add(new THREE.Vector3(0, -wilt * 1.2, 0)).normalize();
-    const head = heads[form.head](random, palette);
+    const head = heads[form.head](random, palette, style);
     const scale = random.range(form.headScale[0], form.headScale[1]);
-    for (const piece of head) piece.scale(scale, scale, scale);
+    for (const piece of head) applyMatrix(piece, matrix.makeScale(scale, scale, scale));
     // Small green sepal cup where the head meets the stem.
-    if (form.head !== "lavender" && form.head !== "hydrangea") head.push(dome(form.stemRadius * 2.2, 0.8, palette.stem, [0, -form.stemRadius, 0]));
+    if (form.head !== "lavender" && form.head !== "hydrangea" && form.head !== "allium" && form.head !== "bellflower") head.push(dome(form.stemRadius * 2.2, 0.8, palette.stem, [0, -form.stemRadius, 0]));
     parts.push(...mountHead(head, body.tip, direction));
 
     if (form.leaves.on === "stem") {
@@ -477,7 +705,8 @@ const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlo
       const leafCount = Math.max(1, Math.round(random.range(form.leaves.count[0], form.leaves.count[1]) / stems));
       for (let leaf = 0; leaf < leafCount; leaf++) {
         const at = curve.getPoint(random.range(0.2, 0.7));
-        parts.push(blade({ length: random.range(form.leaves.length[0], form.leaves.length[1]), width: form.leaves.width, widest: form.leaves.widest, pointy: form.leaves.pointy, cup: 0.25, fold: 0.2, curl: -0.15 - wilt * 0.3 }, palette.leaf, palette.leafTip, angle + random.range(-1.6, 1.6), random.range(form.leaves.elevation[0], form.leaves.elevation[1]) - wilt * 0.4).translate(at.x, at.y, at.z));
+        parts.push(blade({ length: random.range(form.leaves.length[0], form.leaves.length[1]), width: form.leaves.width, widest: form.leaves.widest, pointy: form.leaves.pointy, cup: 0.25, fold: 0.2, curl: -0.15 - wilt * 0.3 }, palette.leaf, palette.leafTip, angle + random.range(-1.6, 1.6), random.range(form.leaves.elevation[0], form.leaves.elevation[1]) - wilt * 0.4));
+        applyMatrix(parts[parts.length - 1], matrix.makeTranslation(at.x, at.y, at.z));
       }
     }
   }
@@ -490,11 +719,13 @@ const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlo
   return parts;
 };
 
-const growMonstera = (random: Random, palette: Palette, extraLeaves: number, wilt: number) => {
+const growMonstera = (random: Random, palette: Palette, extraLeaves: number, wilt: number, variegated = false) => {
   const parts: THREE.BufferGeometry[] = [];
   const leaves = Math.min(9, random.int(4, 6) + extraLeaves);
   const leaf = desaturate(hsl(random.range(135, 150), random.range(0.4, 0.5), random.range(0.25, 0.3)), wilt);
-  const leafTip = desaturate(hsl(random.range(120, 135), 0.45, random.range(0.38, 0.44)), wilt);
+  const rolledTip = hsl(random.range(120, 135), 0.45, random.range(0.38, 0.44));
+  // Variegated leaves wash out to cream toward the tip.
+  const leafTip = desaturate(variegated ? hsl(55, 0.45, 0.86) : rolledTip, wilt);
   const stalk = desaturate(hsl(105, 0.35, 0.4), wilt);
 
   for (let index = 0; index < leaves; index++) {
@@ -521,20 +752,154 @@ const growMonstera = (random: Random, palette: Palette, extraLeaves: number, wil
       cut: young || detail < 1 ? undefined : (u, v) => Math.abs(u) > 0.18 && v > 0.12 && v < 0.86 && ((v * slits + 10) % 1) < 0.16,
     });
     const blade3d = placeBlade(part(surface, leaf, {}, { smooth: true, shade: 0.15, tint: leafTip }), Math.PI / 2 + angle, random.range(0.25, 0.65) - wilt * 0.35);
-    parts.push(blade3d.translate(tip.x, tip.y, tip.z));
+    parts.push(applyMatrix(blade3d, matrix.makeTranslation(tip.x, tip.y, tip.z)));
   }
   return parts;
 };
 
-export const plantArchetypes = [...Object.keys(flowerForms), "monstera"] as (keyof typeof flowerForms | "monstera")[];
+// Echeveria: a tight rosette of thick, pointed leaves with blushing tips.
+const growSucculent = (random: Random, palette: Palette, extraLeaves: number, wilt: number) => {
+  const parts: THREE.BufferGeometry[] = [];
+  const hue = random.range(140, 175);
+  const leaf = desaturate(hsl(hue, random.range(0.3, 0.42), random.range(0.5, 0.58)), wilt);
+  // Tips blush toward the flower colour, or just pale.
+  const blush = desaturate(random.chance(0.5) ? palette.petal.clone().lerp(hsl(hue, 0.35, 0.62), 0.55) : hsl(hue - 20, 0.35, 0.75), wilt);
+  const rings = Math.min(7, random.int(4, 5) + Math.ceil(extraLeaves / 2));
+  const scale = random.range(2.1, 2.5);
+  for (let ring_ = 0; ring_ < rings; ring_++) {
+    const inner = ring_ / Math.max(1, rings - 1);
+    const count = Math.max(5, Math.round(random.range(8, 11) * (1 - inner * 0.4)));
+    for (const angle of ring(count, random, 0.08)) {
+      // Outer leaves splay low, inner ones cup upward; each ring sits a little higher.
+      const leafPart = blade({ length: 0.1 * scale * (1 - inner * 0.5), width: 0.06 * scale * (1 - inner * 0.4), widest: 0.55, pointy: 1.3, cup: 0.9, curl: 0.12, rows: 6, columns: 5 }, leaf, blush, angle + ring_ * 0.35, 0.35 + inner * 0.95 - wilt * 0.3, 0.004 + (1 - inner) * 0.01);
+      parts.push(applyMatrix(leafPart, matrix.makeTranslation(0, inner * 0.035 * scale, 0)));
+    }
+  }
+  if (random.chance(0.5)) {
+    // An arching flower stalk hung with coral bells.
+    const lean = random.range(0, Math.PI * 2);
+    const out = new THREE.Vector3(Math.cos(lean), 0, Math.sin(lean));
+    const tip = out.clone().multiplyScalar(0.12).setY(0.26);
+    parts.push(stem([new THREE.Vector3(0, 0.03, 0), out.clone().multiplyScalar(0.03).setY(0.18), tip], 0.0045, leaf).geometry);
+    for (let index = 0; index < 4; index++) {
+      const at = new THREE.Vector3(0, 0.03, 0).lerp(tip, 0.6 + index * 0.13);
+      parts.push(bead(0.009, palette.petal, at.setY(at.y - 0.008)));
+    }
+  }
+  return parts;
+};
+
+// Arching fronds cut into a comb of leaflets.
+const growFern = (random: Random, _palette: Palette, extraLeaves: number, wilt: number) => {
+  const parts: THREE.BufferGeometry[] = [];
+  const fronds = Math.min(12, random.int(6, 9) + extraLeaves);
+  const hue = random.range(95, 120);
+  const leaf = desaturate(hsl(hue, random.range(0.45, 0.55), random.range(0.28, 0.34)), wilt);
+  const leafTip = desaturate(hsl(hue - 10, 0.55, random.range(0.45, 0.52)), wilt);
+  for (const angle of ring(fronds, random, 0.3)) {
+    const pinnae = random.int(9, 13);
+    const young = random.chance(0.2);
+    parts.push(blade({
+      length: random.range(0.38, 0.5) * (young ? 0.7 : 1),
+      width: random.range(0.15, 0.19),
+      widest: 0.35,
+      pointy: 1.3,
+      cup: 0.1,
+      curl: -0.5 - wilt * 0.3,
+      columns: 12,
+      rows: 40,
+      cut: detail < 1 ? undefined : (u, v) => Math.abs(u) > 0.1 && ((v * pinnae) % 1) > 0.62,
+    }, leaf, leafTip, angle, random.range(0.9, 1.25) - wilt * 0.4, 0.01));
+  }
+  return parts;
+};
+
+// A ribbed barrel or column cactus, crowned with a few blooms.
+const growCactus = (random: Random, palette: Palette, extraBlooms: number, wilt: number) => {
+  const parts: THREE.BufferGeometry[] = [];
+  const body = desaturate(hsl(random.range(105, 135), random.range(0.32, 0.45), random.range(0.4, 0.48)), wilt);
+  const ribs = random.int(8, 12);
+  const columnar = random.chance(0.45);
+  const radius = columnar ? random.range(0.08, 0.1) : random.range(0.13, 0.16);
+  const height = columnar ? random.range(0.3, 0.42) : radius * random.range(1.1, 1.4);
+  const lobe = (r: number, h: number, at: THREE.Vector3, tilt = 0) => {
+    const geometry = new THREE.SphereGeometry(1, resolution(ribs * 3, ribs), resolution(10, 5));
+    const position = geometry.attributes.position.array as Float32Array;
+    for (let index = 0; index < position.length; index += 3) {
+      const x = position[index];
+      const y = position[index + 1];
+      const z = position[index + 2];
+      const rib = 1 + 0.14 * Math.cos(Math.atan2(z, x) * ribs);
+      // Flat-bottomed: squash the lower half into the soil.
+      position[index] = x * r * rib;
+      position[index + 1] = (y < 0 ? y * 0.15 : y) * h;
+      position[index + 2] = z * r * rib;
+    }
+    return part(geometry, body, { position: [at.x, at.y, at.z], rotation: [0, 0, tilt] }, { smooth: true, shade: 0.4 });
+  };
+  parts.push(lobe(radius, height, new THREE.Vector3(0, 0, 0)));
+  if (columnar && random.chance(0.7)) {
+    // An arm or two, branching off and turning upward.
+    for (const side of random.chance(0.5) ? [1] : [1, -1]) {
+      const y = height * random.range(0.35, 0.55);
+      parts.push(lobe(radius * 0.65, height * 0.45, new THREE.Vector3(side * radius * 1.3, y, 0)));
+      parts.push(lobe(radius * 0.45, radius * 0.9, new THREE.Vector3(side * radius * 0.75, y - radius * 0.2, 0), side * 1.2));
+    }
+  }
+  const blooms = Math.min(5, random.int(1, 3) + extraBlooms);
+  for (let index = 0; index < blooms; index++) {
+    const angle = random.range(0, Math.PI * 2);
+    const spread = index === 0 ? 0 : radius * 0.55;
+    const at = new THREE.Vector3(Math.cos(angle) * spread, height * (index === 0 ? 1 : 0.92), Math.sin(angle) * spread);
+    const flower = ring(random.int(10, 14), random, 0.1).map((petal) => blade({ length: 0.045, width: 0.018, widest: 0.6, pointy: 0.9, cup: 0.4, curl: 0.05 }, palette.petalBase, palette.petal, petal, 0.55 - wilt * 0.3, 0.006));
+    flower.push(dome(0.01, 0.8, palette.pollen));
+    parts.push(...mountHead(flower, at, new THREE.Vector3(Math.cos(angle) * 0.3, 1, Math.sin(angle) * 0.3)));
+  }
+  return parts;
+};
+
+const foliageForms = {
+  monstera: { families: undefined, variants: [{ name: "classic", weight: 7 }, { name: "variegated", weight: 3 }] },
+  succulent: { families: ["pink", "coral", "peach", "magenta", "purple"], variants: undefined },
+  fern: { families: undefined, variants: undefined },
+  cactus: { families: ["pink", "magenta", "yellow", "orange", "red", "white", "coral"], variants: undefined },
+} satisfies Record<string, { families?: PetalFamily[]; variants?: Variant[] }>;
+type FoliageName = keyof typeof foliageForms;
+
+export const plantArchetypes = [...Object.keys(flowerForms), ...Object.keys(foliageForms)] as (keyof typeof flowerForms | FoliageName)[];
 export type PlantArchetype = (typeof plantArchetypes)[number];
 
-const archetypeWeights: Record<PlantArchetype, number> = {
+// The original species and their odds. Never change these: every existing
+// plant's species was rolled from them.
+const archetypeWeights = {
   daisy: 14, sunflower: 8, tulip: 13, rose: 11, poppy: 10, lily: 9, hydrangea: 9, lavender: 9, monstera: 10,
+} satisfies Partial<Record<PlantArchetype, number>>;
+
+// Species added later. A new plant has NEWCOMER_SHARE odds of being one of these.
+const newcomerWeights = {
+  cosmos: 10, gerbera: 9, bellflower: 8, allium: 7, calla: 8, iris: 8, succulent: 8, fern: 8, cactus: 6,
+} satisfies Partial<Record<PlantArchetype, number>>;
+const NEWCOMER_SHARE = 0.4;
+const RARE_COLOR_SHARE = 0.1;
+
+// Journals planted before this keep exactly the plant they always had; newer
+// ones can grow the newer species, variants and rare colours.
+export const VARIETY_SINCE = Date.UTC(2026, 9, 17);
+
+const pickWeighted = <T extends string>(random: Random, weights: Record<T, number>) => {
+  const entries = Object.entries(weights) as [T, number][];
+  let roll = random.range(0, entries.reduce((total, [, weight]) => total + weight, 0));
+  for (const [name, weight] of entries) {
+    roll -= weight;
+    if (roll <= 0) return name;
+  }
+  return entries[0][0];
 };
 
 export type PlantModel = {
   archetype: PlantArchetype;
+  // The named look within the species, e.g. "parrot" tulip.
+  variant: string;
   geometry: THREE.BufferGeometry;
   height: number;
   swaySpeed: number;
@@ -544,46 +909,73 @@ export type PlantModel = {
   vitality: number;
 };
 
-export const createPlant = (
-  seed: string,
-  { mood, waterings = 0, archetype: forced, detail: level = 1 }: { mood: MoodGrade; waterings?: number; archetype?: PlantArchetype; detail?: number }
-): PlantModel => {
+type PlantOptions = {
+  mood: MoodGrade;
+  waterings?: number;
+  // When the journal was written. Before VARIETY_SINCE a plant grows exactly as it always has.
+  plantedAt?: number;
+  archetype?: PlantArchetype;
+  variant?: string;
+  detail?: number;
+};
+
+export const createPlant = (seed: string, { detail: level = 1, ...options }: PlantOptions): PlantModel => {
   detail = level;
   try {
-    return growPlant(seed, mood, waterings, forced);
+    return growPlant(seed, options);
   } finally {
     detail = 1;
   }
 };
 
-const growPlant = (seed: string, mood: MoodGrade, waterings: number, forced: PlantArchetype | undefined): PlantModel => {
+const variantsOf = (archetype: PlantArchetype): Variant[] | undefined =>
+  archetype in foliageForms ? foliageForms[archetype as FoliageName].variants : speciesVariants[archetype as keyof typeof flowerForms];
+
+// The variant names a species can grow, classic first (for the plant lab).
+export const plantVariants = (archetype: PlantArchetype) => variantsOf(archetype)?.map((variant) => variant.name) ?? ["classic"];
+
+const growPlant = (seed: string, { mood, waterings = 0, plantedAt, archetype: forcedArchetype, variant: forcedVariant }: Omit<PlantOptions, "detail">): PlantModel => {
   const random = createRandom(`plant:${seed}`);
-  let roll = random.range(0, Object.values(archetypeWeights).reduce((total, weight) => total + weight, 0));
-  let archetype: PlantArchetype = "daisy";
-  for (const [name, weight] of Object.entries(archetypeWeights) as [PlantArchetype, number][]) {
-    roll -= weight;
-    if (roll <= 0) { archetype = name; break; }
-  }
-  archetype = forced ?? archetype;
+  let archetype: PlantArchetype = pickWeighted(random, archetypeWeights);
+
+  // Everything added since the first species draws from its own stream, so the
+  // original stream (shape, colour) of every older plant stays untouched.
+  const varied = plantedAt === undefined || plantedAt >= VARIETY_SINCE;
+  const variety = createRandom(`variety:${seed}`);
+  if (varied && variety.chance(NEWCOMER_SHARE)) archetype = pickWeighted(variety, newcomerWeights);
+  archetype = forcedArchetype ?? archetype;
+
+  const variants = variantsOf(archetype);
+  const rolledVariant = varied && variants ? pickWeighted(variety, Object.fromEntries(variants.map((option) => [option.name, option.weight]))) : undefined;
+  const variant = variants?.find((option) => option.name === (forcedVariant ?? rolledVariant)) ?? variants?.[0];
 
   const desaturation = moodGrayscale[mood] ?? 0;
-  const families = archetype === "monstera" ? undefined : (flowerForms[archetype] as FlowerForm).families;
-  const palette = createPalette(random, desaturation, families ? petalFamilies.find((family) => family.name === random.pick(families)) : undefined);
+  const isFlower = archetype in flowerForms;
+  const families = isFlower ? (flowerForms[archetype as keyof typeof flowerForms] as FlowerForm).families : foliageForms[archetype as FoliageName].families;
+  const pickedFamily = families ? petalFamilies.find((family) => family.name === random.pick(families)) : undefined;
+  // Rare colours only for species that allow any colour.
+  const rare = varied && !families && variety.chance(RARE_COLOR_SHARE) ? variety.pick(rareFamilies) : undefined;
+  const palette = createPalette(random, desaturation, variant?.family ?? rare ?? pickedFamily);
   // Each watering from a friend opens another bloom (or unfurls a leaf), up to a limit.
   const extra = Math.min(waterings, 4);
   const wilt = desaturation * 0.5;
-  const parts = archetype === "monstera"
-    ? growMonstera(random, palette, extra, desaturation)
-    : growFlower(flowerForms[archetype], random, palette, extra, wilt);
+  const parts =
+    archetype === "monstera" ? growMonstera(random, palette, extra, desaturation, variant?.name === "variegated")
+    : archetype === "succulent" ? growSucculent(random, palette, extra, wilt)
+    : archetype === "fern" ? growFern(random, palette, extra, desaturation)
+    : archetype === "cactus" ? growCactus(random, palette, extra, wilt)
+    : growFlower({ ...flowerForms[archetype as keyof typeof flowerForms], ...variant?.form } as FlowerForm, random, palette, extra, wilt, variant?.style ?? {});
 
   const geometry = merge(parts);
-  geometry.rotateY(random.range(0, Math.PI * 2));
-  const variety = random.range(1.25, 1.5);
-  geometry.scale(variety, variety, variety);
-  geometry.computeBoundingBox();
+  applyMatrix(geometry, matrix.makeRotationY(random.range(0, Math.PI * 2)));
+  const size = random.range(1.25, 1.5);
+  applyMatrix(geometry, matrix.makeScale(size, size, size));
+  boundingBox(geometry);
+  boundingSphere(geometry);
 
   return {
     archetype,
+    variant: variant?.name ?? "classic",
     geometry,
     height: geometry.boundingBox!.max.y,
     swaySpeed: random.range(0.8, 1.3),

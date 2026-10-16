@@ -3,11 +3,14 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ChevronRight, LockKeyhole, X } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
+import { useQuery } from "convex/react";
+import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 import { getCalendarDate } from "@/lib/calendar-date";
 import { PlantReaction, moodLabels } from "./garden-flower";
-import type { IslandPost } from "./island-garden";
 import { Badge } from "./ui/badge";
+import { Skeleton } from "./ui/skeleton";
+import type { WorldPost } from "./world-garden-scene";
 
 const SWIPE = { close: 70, page: 60 };
 
@@ -24,7 +27,8 @@ export const JournalPanel = ({
   onNext,
   onClose,
 }: {
-  post: IslandPost;
+  // Posts from the world arrive without their words; they're fetched here.
+  post: WorldPost;
   index: number;
   total: number;
   // Shown when reading someone else's garden.
@@ -35,6 +39,8 @@ export const JournalPanel = ({
   onClose: () => void;
 }) => {
   const isPrivate = post.visibility === "private";
+  const fetched = useQuery(api.posts.getById, post.body === undefined ? { id: post._id as Id<"posts"> } : "skip");
+  const body = post.body ?? fetched?.body;
   const date = getCalendarDate(post._creationTime, post.entryDate).date;
   const swipe = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -66,7 +72,7 @@ export const JournalPanel = ({
     <section
       data-world-control
       aria-label="Journal"
-      className="absolute inset-x-0 bottom-0 z-[2500] flex max-h-[52%] flex-col rounded-t-[1.75rem] border border-b-0 border-border/70 bg-card pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_40px_oklch(0.2_0.03_70/16%)] motion-safe:animate-in motion-safe:slide-in-from-bottom-10 motion-safe:fade-in-0 sm:inset-x-auto sm:top-4 sm:right-4 sm:bottom-4 sm:max-h-none sm:w-[22rem] sm:rounded-3xl sm:border-b sm:pb-0 sm:shadow-xl sm:motion-safe:slide-in-from-bottom-0 sm:motion-safe:slide-in-from-right-8"
+      className="absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2500] flex max-h-[52%] flex-col rounded-[1.75rem] border border-border/70 bg-card shadow-[0_12px_40px_oklch(0.2_0.03_70/22%)] motion-safe:animate-in motion-safe:slide-in-from-bottom-10 motion-safe:fade-in-0 sm:inset-x-auto sm:top-4 sm:right-4 sm:bottom-4 sm:max-h-none sm:w-[22rem] sm:rounded-3xl sm:shadow-xl sm:motion-safe:slide-in-from-bottom-0 sm:motion-safe:slide-in-from-right-8"
       style={drag.x || drag.y ? { transform: `translate(${drag.x * 0.35}px, ${drag.y}px)`, transition: "none" } : { transition: "transform 200ms ease-out" }}
     >
       <header
@@ -103,7 +109,17 @@ export const JournalPanel = ({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:p-5">
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed [overflow-wrap:anywhere]">{post.body}</p>
+        {body !== undefined ? (
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed [overflow-wrap:anywhere]">{body}</p>
+        ) : fetched === null ? (
+          <p className="text-sm text-muted-foreground">This journal is no longer here.</p>
+        ) : (
+          <div role="status" aria-label="Loading journal" className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        )}
       </div>
 
       <footer className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-2 sm:px-4 sm:py-3">

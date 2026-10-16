@@ -1,15 +1,41 @@
 "use client";
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PostForm } from "./post-form";
-import { buttonVariants } from "./ui/button";
+import dynamic from "next/dynamic";
+import { useState, useSyncExternalStore } from "react";
 import { PlantIcon, SparkleIcon } from "@phosphor-icons/react";
-import { api } from "@puma-brain/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { cn } from "@/lib/utils";
+import { api } from "@puma-brain/backend/convex/_generated/api";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "./ui/button";
+import { Skeleton } from "./ui/skeleton";
 
-export const PostDialog = ({
+// The form (and its validation libraries) loads when the sheet is first
+// reached for, not with every page.
+const loadForm = () => import("./post-form");
+const PostForm = dynamic(() => loadForm().then((module) => module.PostForm), {
+  loading: () => (
+    <div aria-hidden="true" className="space-y-3 pt-1">
+      <Skeleton className="h-9 w-full rounded-full" />
+      <Skeleton className="h-36 w-full rounded-2xl" />
+      <Skeleton className="h-9 w-full rounded-full" />
+      <Skeleton className="h-24 w-full rounded-xl" />
+    </div>
+  ),
+});
+
+const wideQuery = "(min-width: 640px)";
+const subscribeToWidth = (onChange: () => void) => {
+  const query = window.matchMedia(wideQuery);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+};
+
+// Writing a journal happens in a sheet: from the bottom on phones (where the
+// app is mostly used), from the side on wider screens. It closes once the
+// journal is planted, so you watch the seed land in your garden.
+export const PostSheet = ({
   size = "sm",
   floating = false,
   mobileNav = false,
@@ -20,6 +46,8 @@ export const PostDialog = ({
 }) => {
   const timeZone = getBrowserTimeZone();
   const availability = useQuery(api.posts.getEntryAvailability, { timeZone });
+  const [open, setOpen] = useState(false);
+  const isWide = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(wideQuery).matches, () => false);
   const floatingClass = floating && "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-40 h-11 -translate-x-1/2 px-5 shadow-[0_12px_28px_oklch(0.24_0.04_70/25%)] sm:static sm:h-8 sm:translate-x-0 sm:px-3 sm:shadow-none";
   const hasNoAvailableDate =
     availability !== undefined &&
@@ -51,8 +79,10 @@ export const PostDialog = ({
   }
 
   return (
-    <Dialog>
-      <DialogTrigger
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        onPointerDown={() => void loadForm()}
+        onFocus={() => void loadForm()}
         aria-label={mobileNav ? "Create journal" : undefined}
         className={mobileNav
           ? "group -mt-7 flex min-w-0 flex-col items-center gap-1 text-[10px] font-semibold text-primary focus-visible:outline-none"
@@ -71,21 +101,31 @@ export const PostDialog = ({
             Write journal
           </>
         )}
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader className="px-6 pt-6">
-          <DialogTitle className="font-display text-2xl tracking-[-0.035em]">Plant a journal</DialogTitle>
-          <DialogDescription>There’s no right way to begin. Just be honest.</DialogDescription>
-        </DialogHeader>
-        <div className="px-6 pb-6">
+      </SheetTrigger>
+      <SheetContent
+        side={isWide ? "right" : "bottom"}
+        className={cn(
+          "bg-card",
+          isWide
+            ? "w-full sm:max-w-md"
+            : "max-h-[92svh] rounded-t-[1.75rem] pb-[env(safe-area-inset-bottom)]"
+        )}
+      >
+        {!isWide ? <span aria-hidden="true" className="mx-auto mt-2.5 block h-1.5 w-10 shrink-0 rounded-full bg-muted-foreground/25" /> : null}
+        <SheetHeader className={cn("pr-14", isWide ? "pt-8" : "pt-3")}>
+          <SheetTitle className="font-display text-2xl tracking-[-0.035em]">Plant a journal</SheetTitle>
+          <SheetDescription>There’s no right way to begin. Just be honest.</SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
           {availability ? (
             <PostForm
               key={`${availability.today}-${availability.canPostToday}-${availability.canPostYesterday}`}
               availability={availability}
+              onPlanted={() => setOpen(false)}
             />
           ) : null}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 };

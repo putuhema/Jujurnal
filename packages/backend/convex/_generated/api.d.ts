@@ -8,7 +8,6 @@
  * @module
  */
 
-import type * as analysis from "../analysis.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as healthCheck from "../healthCheck.js";
@@ -31,7 +30,6 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  analysis: typeof analysis;
   auth: typeof auth;
   crons: typeof crons;
   healthCheck: typeof healthCheck;

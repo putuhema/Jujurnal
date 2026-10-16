@@ -15,6 +15,8 @@ import { GlobeHemisphereWestIcon, LockKeyIcon } from "@phosphor-icons/react";
 import { Sprout } from "lucide-react";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
 import { playGardenSound, prepareGardenAudio } from "@/lib/garden-sounds";
+import type { MoodGrade } from "@/lib/garden-procedural";
+import { MoodPicker } from "./mood-picker";
 
 type EntryAvailability = {
   today: string;
@@ -25,14 +27,18 @@ type EntryAvailability = {
 
 export const PostForm = ({
   availability,
+  onPlanted,
 }: {
   availability: EntryAvailability;
+  // Called once the journal is saved, e.g. to close the sheet and reveal the garden.
+  onPlanted?: () => void;
 }) => {
   const timeZone = getBrowserTimeZone();
   const createPost = useAction(api.posts.create);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
+  const [mood, setMood] = useState<MoodGrade | null>(null);
   const [entryDate, setEntryDate] = useState<string | null>(() =>
     availability.canPostToday
       ? availability.today
@@ -55,6 +61,10 @@ export const PostForm = ({
         setError("Choose an available journal date");
         return;
       }
+      if (!mood) {
+        setError("Pick the weather that feels like today");
+        return;
+      }
       setError(null);
       setIsSubmitting(true);
       try {
@@ -63,9 +73,12 @@ export const PostForm = ({
           timeZone,
           entryDate,
           visibility,
+          mood,
         });
         playGardenSound("plant");
         form.reset();
+        setMood(null);
+        onPlanted?.();
       } catch (err: any) {
         setError(err.message || "Failed to create post");
       }
@@ -112,6 +125,14 @@ export const PostForm = ({
               Yesterday
             </Button>
           </div>
+          <MoodPicker
+            value={mood}
+            onChange={(grade) => {
+              setMood(grade);
+              setError(null);
+            }}
+            disabled={isDisabled}
+          />
           <div
             className="grid grid-cols-2 gap-2"
             role="group"

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { IslandGardenSkeleton } from "./island-garden-skeleton";
 import { GardenZoomProvider, GardenZoomToggle } from "./garden-zoom";
-import { IslandGarden } from "./island-garden";
+import { IslandGarden, preloadIslandGarden } from "./island-garden";
 import { PeriodToggle, type PeriodView } from "./period-toggle";
 import { Skeleton } from "./ui/skeleton";
 import {
@@ -33,20 +33,17 @@ export const GardenView = () => {
   const [view, setView] = useState<PeriodView>("month");
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const userPosts = useQuery(api.posts.getByUserId, userId ? { userId } : "skip");
+  useEffect(preloadIslandGarden, []);
+  const garden = useQuery(api.posts.getUserYear, userId ? { userId, year: selectedYear } : "skip");
+  const userPosts = garden?.posts;
   const gardenTheme = useQuery(
     api.preferences.getGardenTheme,
     userId ? { userId } : "skip"
   );
 
   const sortedPosts = [...(userPosts ?? [])].sort((a, b) => a._creationTime - b._creationTime);
-  const years = new Set(
-    sortedPosts.map(
-      (post) => getCalendarDate(post._creationTime, post.entryDate).year
-    )
-  );
-  years.add(currentYear);
-  const yearOptions = [...years].sort((a, b) => b - a);
+  const firstYear = Math.min(garden?.firstYear ?? currentYear, currentYear);
+  const yearOptions = Array.from({ length: currentYear - firstYear + 1 }, (_, index) => currentYear - index);
   const visiblePosts = sortedPosts.filter((post) => {
     const date = getCalendarDate(post._creationTime, post.entryDate);
     return date.year === selectedYear && (view === "year" || date.month === selectedMonth);
