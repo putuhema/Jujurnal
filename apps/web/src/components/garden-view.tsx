@@ -117,7 +117,7 @@ export const GardenView = () => {
           <p>Nothing planted in {periodLabel} yet.</p>
         </div>
       ) : (
-        <IslandGarden posts={visiblePosts} />
+        <IslandGarden posts={visiblePosts} seed={userId} />
       )}
     </section>
     </GardenZoomProvider>

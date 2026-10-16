@@ -1,7 +1,5 @@
-import { AllGardensView } from "@/components/all-gardens-view";
+import { HomeGarden } from "@/components/home-garden";
 
 export default function Page() {
-  return (
-    <AllGardensView />
-  );
+  return <HomeGarden />;
 }

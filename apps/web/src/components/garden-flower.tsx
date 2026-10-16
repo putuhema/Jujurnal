@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
@@ -8,7 +8,7 @@ import { X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { getPlantSpriteFrame } from "@/lib/garden-sprites";
+import type { MoodGrade } from "@/lib/garden-procedural";
 import { cn } from "@/lib/utils";
 import { playGardenSound } from "@/lib/garden-sounds";
 import { DropIcon, LockKeyIcon } from "@phosphor-icons/react";
@@ -16,101 +16,21 @@ import { toast } from "sonner";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 
-type MoodGrade =
-  | "A+"
-  | "A"
-  | "A-"
-  | "B+"
-  | "B"
-  | "B-"
-  | "C+"
-  | "C"
-  | "C-"
-  | "D+"
-  | "D"
-  | "D-"
-  | "F";
-
-const moodGrayscale: Record<MoodGrade, number> = {
-  "A+": 0, A: 0, "A-": 0.05,
-  "B+": 0.1, B: 0.2, "B-": 0.3,
-  "C+": 0.4, C: 0.5, "C-": 0.6,
-  "D+": 0.7, D: 0.8, "D-": 0.9,
-  F: 1,
-};
-
-const PlantSprite = ({ flowerId, mood }: { flowerId: number; mood: MoodGrade }) => {
-  const { column, row, anchorX, anchorY } = getPlantSpriteFrame(flowerId);
-  const spriteRef = useRef<HTMLSpanElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const origin = `${anchorX}% ${anchorY}%`;
-
-  useEffect(() => {
-    const element = spriteRef.current;
-    if (!element) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsVisible(entry.isIntersecting);
-    }, { threshold: 0.1 });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <span ref={spriteRef} aria-hidden="true" className="plant-sprite block size-full" data-visible={isVisible && isLoaded}>
-      <span className="plant-growth block size-full" style={{ transformOrigin: origin }}>
-        <span
-          className="plant-sway relative block size-full overflow-hidden"
-          style={{
-            transformOrigin: origin,
-            animationDuration: `${3.2 + (flowerId % 7) * 0.2}s`,
-            animationDelay: `${-(flowerId % 11) * 0.4}s`,
-            filter: `grayscale(${moodGrayscale[mood]})`,
-          }}
-        >
-          <img
-            src="/plants-sprite.webp"
-            alt=""
-            draggable={false}
-            onLoad={() => setIsLoaded(true)}
-            className="pointer-events-none absolute max-w-none select-none"
-            style={{
-              width: "1400%",
-              height: "700%",
-              left: `${-column * 100}%`,
-              top: `${-row * 100}%`,
-              imageRendering: "pixelated",
-            }}
-          />
-        </span>
-      </span>
-    </span>
-  );
-};
-
 const moodLabels: Record<MoodGrade, string> = {
   "A+": "Sunlit", A: "Bright", "A-": "Bright", "B+": "Growing", B: "Growing", "B-": "Growing",
   "C+": "Steady", C: "Steady", "C-": "Steady", "D+": "Low tide", D: "Low tide", "D-": "Low tide", F: "Heavy",
 };
 
 interface GardenFlowerProps {
-  flowerId?: number;
   mood: MoodGrade;
   postId: Id<"posts">;
   text: string;
   visibility: "public" | "private";
-  size?: "xs" | "sm" | "md" | "lg";
   createdAt: Date;
   isNewest?: boolean;
-  fitPlot?: boolean;
+  style?: CSSProperties;
+  onActiveChange?: (isActive: boolean) => void;
 }
-
-const sizeClasses = {
-  xs: "size-14",
-  sm: "size-16",
-  md: "size-20",
-  lg: "size-24",
-};
 
 const getPlantTitle = (
   isPrivate: boolean,
@@ -228,66 +148,53 @@ const JournalTypewriter = ({ text }: { text: string }) => {
   );
 };
 
+// A transparent hit area laid over the 3D plant, so plants stay keyboard and
+// screen-reader reachable while the WebGL scene handles the visuals.
 export const GardenFlower = ({
-  flowerId,
   mood,
   postId,
   text,
   visibility,
-  size = "md",
   createdAt,
   isNewest = false,
-  fitPlot = false,
+  style,
+  onActiveChange,
 }: GardenFlowerProps) => {
-  const safeFlowerId = flowerId && Number.isFinite(flowerId) && flowerId > 0 ? Math.floor(flowerId) : 1;
-  const { anchorX, anchorY } = getPlantSpriteFrame(safeFlowerId);
   const isPrivate = visibility === "private";
-
   const [isOpen, setIsOpen] = useState(false);
 
-  const flower = (
-    <div
-      className={cn(
-        "garden-plant island-flower relative z-10 flex items-center justify-center transition-transform duration-300 hover:scale-110",
-        "cursor-pointer",
-        fitPlot ? "aspect-square w-full" : sizeClasses[size]
-      )}
-      style={{ transformOrigin: `${anchorX}% ${anchorY}%` }}
-      title={getPlantTitle(isPrivate, isNewest, mood)}
-    >
-      <PlantSprite flowerId={safeFlowerId} mood={mood} />
-      {isPrivate ? (
-        <span
-          className="absolute -right-1 -top-1 z-20 inline-flex size-5 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
-          role="img"
-          aria-label="Private journal"
-        >
-          <LockKeyIcon className="size-3" weight="fill" />
-        </span>
-      ) : null}
-    </div>
-  );
+  const triggerProps = {
+    className: "absolute -translate-x-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    style,
+    title: getPlantTitle(isPrivate, isNewest, mood),
+    onPointerEnter: () => onActiveChange?.(true),
+    onPointerLeave: () => onActiveChange?.(false),
+    onFocus: () => onActiveChange?.(true),
+    onBlur: () => onActiveChange?.(false),
+    onClick: () => playGardenSound("click"),
+  };
 
   if (isPrivate) return (
     <button
       type="button"
-      className={fitPlot ? "block w-full" : undefined}
+      {...triggerProps}
       aria-label={isNewest ? "Most recently planted private journal plant" : "Private journal plant"}
-      onClick={() => playGardenSound("click")}
     >
-      {flower}
+      <span
+        className="absolute -top-2 left-1/2 inline-flex size-5 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm"
+        aria-hidden="true"
+      >
+        <LockKeyIcon className="size-3" weight="fill" />
+      </span>
     </button>
   );
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger
-        onClick={() => playGardenSound("click")}
-        className={fitPlot ? "block w-full" : undefined}
+        {...triggerProps}
         aria-label={getJournalAriaLabel(isNewest, mood)}
-      >
-        {flower}
-      </PopoverTrigger>
+      />
       <PopoverContent
         side="top"
         sideOffset={12}
