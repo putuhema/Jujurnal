@@ -6,9 +6,14 @@ import * as THREE from "three";
 // - rim light and a soft glow toward sunlit tips, stronger on happier plants
 // - grow-in: the plant is revealed from the ground up behind a glowing edge
 // - hover: a gentle lift in brightness and rim
+// - touch: plants lean away from the pointer as it brushes past
+// - visits and watering: a fade between grayscale and colour, and a wet sheen
 
 // One clock shared by every plant material.
 export const plantTime = { value: 0 };
+// Where the pointer touches the ground, and how strongly plants react (0 when it's away).
+export const plantPointer = { value: new THREE.Vector3(1e4, 0, 1e4) };
+export const plantPointerStrength = { value: 0 };
 
 export type PlantUniforms = {
   uHeight: { value: number };
@@ -16,12 +21,18 @@ export type PlantUniforms = {
   uVitality: { value: number };
   uReveal: { value: number };
   uHover: { value: number };
+  // 0 is full colour, 1 is grayscale (other people's gardens).
+  uGray: { value: number };
+  // Brief sheen after a plant is watered, 0–1.
+  uWater: { value: number };
 };
 
 const vertexPars = /* glsl */ `
   uniform float uTime;
   uniform float uHeight;
   uniform float uPhase;
+  uniform vec3 uPointer;
+  uniform float uPointerStrength;
   varying float vHeight;
 `;
 
@@ -33,12 +44,22 @@ const vertexWind = /* glsl */ `
   float flutter = sin(uTime * 3.1 + uPhase + position.x * 11.0 + position.z * 9.0) * 0.01;
   transformed.x += (gust + flutter) * bend * uHeight;
   transformed.z += (sin(uTime * 1.3 + uPhase * 0.7) * 0.02 + flutter) * bend * uHeight;
+
+  // Lean the whole plant away from the pointer, strongest at the tips.
+  vec3 plantBase = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  vec2 away = plantBase.xz - uPointer.xz;
+  float pointerDistance = length(away);
+  float pointerPush = uPointerStrength * smoothstep(1.1, 0.15, pointerDistance) * bend;
+  float modelScale = max(length(modelMatrix[0].xyz), 0.001);
+  transformed.xz += away / max(pointerDistance, 0.001) * pointerPush * 0.3 * uHeight / modelScale;
 `;
 
 const fragmentPars = /* glsl */ `
   uniform float uVitality;
   uniform float uReveal;
   uniform float uHover;
+  uniform float uGray;
+  uniform float uWater;
   varying float vHeight;
 `;
 
@@ -63,11 +84,19 @@ const fragmentGlow = /* glsl */ `
   outgoingLight += vec3(1.0, 0.88, 0.5) * front * 2.0;
 
   outgoingLight *= 1.0 + uHover * 0.12;
+  outgoingLight += vec3(0.55, 0.8, 1.0) * uWater * (0.18 + 0.3 * fresnel);
+
+  float luma = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
+  outgoingLight = mix(outgoingLight, vec3(luma) * vec3(1.0, 0.985, 0.96), uGray * 0.92);
   #include <opaque_fragment>
 `;
 
 const extendShader: THREE.Material["onBeforeCompile"] = function (this: THREE.Material & { userData: { plantUniforms: PlantUniforms } }, shader) {
-  Object.assign(shader.uniforms, this.userData.plantUniforms, { uTime: plantTime });
+  Object.assign(shader.uniforms, this.userData.plantUniforms, {
+    uTime: plantTime,
+    uPointer: plantPointer,
+    uPointerStrength: plantPointerStrength,
+  });
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", `#include <common>\n${vertexPars}`)
     .replace("#include <begin_vertex>", vertexWind);
@@ -77,6 +106,19 @@ const extendShader: THREE.Material["onBeforeCompile"] = function (this: THREE.Ma
     .replace("#include <opaque_fragment>", fragmentGlow);
 };
 
+// The shadow pass sways the same way as the plant itself. Without this, shadows
+// stay still while leaves move through them, which reads as flickering.
+const extendDepthShader: THREE.Material["onBeforeCompile"] = function (this: THREE.Material & { userData: { plantUniforms: PlantUniforms } }, shader) {
+  Object.assign(shader.uniforms, this.userData.plantUniforms, {
+    uTime: plantTime,
+    uPointer: plantPointer,
+    uPointerStrength: plantPointerStrength,
+  });
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", `#include <common>\n${vertexPars}`)
+    .replace("#include <begin_vertex>", vertexWind);
+};
+
 export const createPlantMaterial = ({ height, phase, vitality }: { height: number; phase: number; vitality: number }) => {
   const uniforms: PlantUniforms = {
     uHeight: { value: height },
@@ -84,6 +126,8 @@ export const createPlantMaterial = ({ height, phase, vitality }: { height: numbe
     uVitality: { value: vitality },
     uReveal: { value: 1 },
     uHover: { value: 0 },
+    uGray: { value: 0 },
+    uWater: { value: 0 },
   };
   // Petals and leaves are single surfaces, so draw both faces.
   const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
@@ -91,5 +135,10 @@ export const createPlantMaterial = ({ height, phase, vitality }: { height: numbe
   material.onBeforeCompile = extendShader;
   // Every plant shares one compiled program; only the uniforms differ.
   material.customProgramCacheKey = () => "jujurnal-plant";
-  return { material, uniforms };
+
+  const depthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.DoubleSide });
+  depthMaterial.userData.plantUniforms = uniforms;
+  depthMaterial.onBeforeCompile = extendDepthShader;
+  depthMaterial.customProgramCacheKey = () => "jujurnal-plant-depth";
+  return { material, depthMaterial, uniforms };
 };

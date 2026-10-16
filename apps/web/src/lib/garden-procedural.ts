@@ -693,15 +693,17 @@ export const buildIsland = (
 ): GardenLayout => {
   const distanceFromCenter = (cell: Cell) => Math.hypot(cell.x - centerX, cell.z - centerZ);
   // Oldest journals take the heart of the island; newer ones spread outward.
-  const plotCells = cells
+  // Every grass cell gets its order and jitter up front, so random draws never
+  // depend on how many plants there are: adding a journal plants one more
+  // flower without reshuffling the rest of the island.
+  const candidates = cells
     .filter((cell) => cell.kind === "grass")
     .map((cell) => ({ cell, order: distanceFromCenter(cell) + random.range(0, 1.1) }))
     .sort((a, b) => a.order - b.order)
-    .slice(0, plantCount)
-    .map(({ cell }) => cell);
-  const plots = plotCells.map((cell) => {
+    .map(({ cell }) => ({ cell, x: cell.x + random.range(-0.12, 0.12), z: cell.z + random.range(-0.12, 0.12) }));
+  const plots = candidates.slice(0, plantCount).map(({ cell, x, z }) => {
     cell.used = true;
-    return { x: cell.x + random.range(-0.12, 0.12), y: cell.top, z: cell.z + random.range(-0.12, 0.12) };
+    return { x, y: cell.top, z };
   });
 
   const grassA = hsl(grassHue, 0.5, 0.55);
@@ -735,7 +737,8 @@ export const buildIsland = (
     ? merge(waterCells.map((cell) => part(new THREE.BoxGeometry(1, 0.06, 1), hsl(195, 0.65, 0.58), { position: [cell.x, cell.top - 0.06, cell.z] }, { shade: 0 })))
     : null;
 
-  const decorParts: THREE.BufferGeometry[] = [];
+  const keptDecor: THREE.BufferGeometry[] = [];
+  const decorParts = keptDecor;
   for (const cell of waterCells) {
     if (random.chance(0.6)) decorParts.push(part(new THREE.CylinderGeometry(0.12, 0.12, 0.015, 8), hsl(110, 0.45, 0.45), { position: [cell.x + random.range(-0.25, 0.25), cell.top - 0.025, cell.z + random.range(-0.25, 0.25)] }, { shade: 0 }));
     if (random.chance(0.4)) {
@@ -748,8 +751,11 @@ export const buildIsland = (
       }
     }
   }
+  const skipped: THREE.BufferGeometry[] = [];
   for (const cell of cells) {
-    if (cell.kind === "water" || cell.used) continue;
+    if (cell.kind === "water") continue;
+    // Planted cells still draw their decoration (then drop it) to keep later draws stable.
+    const decorParts = cell.used ? skipped : keptDecor;
     const roll = random.next();
     const x = cell.x + random.range(-0.3, 0.3);
     const z = cell.z + random.range(-0.3, 0.3);
@@ -771,13 +777,14 @@ export const buildIsland = (
     }
   }
 
+  for (const piece of skipped) piece.dispose();
   const bounds = island.boundingBox!.clone();
   bounds.max.y += 1.5;
 
   return {
     island,
     water,
-    decor: decorParts.length ? merge(decorParts) : null,
+    decor: keptDecor.length ? merge(keptDecor) : null,
     plots,
     bounds,
   };

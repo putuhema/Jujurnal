@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createRandom, type MoodGrade } from "@/lib/garden-procedural";
 import type { IslandPost } from "./island-garden";
 import type { WorldGardenEntry } from "./world-garden-scene";
@@ -28,14 +28,42 @@ const sampleGarden = (userId: string, name: string, count: number, now: number):
 };
 
 export const WorldPreview = () => {
-  const { me, others } = useMemo(() => {
+  const [extra, setExtra] = useState(0);
+  const [watered, setWatered] = useState(() => new Set<string>());
+  const others = useMemo(() => {
     const now = Date.now();
-    return {
-      me: sampleGarden("preview-me", "You", 14, now),
-      others: Array.from({ length: 40 }, (_, index) =>
-        sampleGarden(`preview-${index}`, `${names[index % names.length]} ${index + 1}`, 3 + ((index * 7) % 22), now)
-      ),
-    };
+    return Array.from({ length: 40 }, (_, index) =>
+      sampleGarden(`preview-${index}`, `${names[index % names.length]} ${index + 1}`, 3 + ((index * 7) % 22), now)
+    );
   }, []);
-  return <WorldGardenScene me={me} others={others} />;
+  const me = useMemo(() => {
+    const garden = sampleGarden("preview-me", "You", 14, Date.now());
+    // "Plant a journal" adds today's entries one at a time, as if written just now.
+    for (let index = 0; index < extra; index++) {
+      garden.posts.push({ ...garden.posts[0], _id: `preview-me-new-${index}` as IslandPost["_id"], _creationTime: Date.now(), body: "A brand new journal", mood: "A+" });
+    }
+    return garden;
+  }, [extra]);
+
+  return (
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={() => setExtra((count) => count + 1)}
+        className="rounded-full border border-border px-4 py-1.5 text-sm hover:bg-muted"
+      >
+        Plant a journal (test the planting moment)
+      </button>
+      <WorldGardenScene
+        demo
+        me={me}
+        others={others}
+        onWater={async (postId) => {
+          if (watered.has(postId)) return "already";
+          setWatered((set) => new Set(set).add(postId));
+          return "watered";
+        }}
+      />
+    </div>
+  );
 };

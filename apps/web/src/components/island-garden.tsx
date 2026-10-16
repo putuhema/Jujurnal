@@ -10,6 +10,7 @@ export type IslandPost = {
   _creationTime: number;
   body: string;
   userId?: string;
+  entryDate?: string;
   mood: MoodGrade;
   visibility?: "public" | "private";
   reactionCount?: number;

@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 
-const moodLabels: Record<MoodGrade, string> = {
+export const moodLabels: Record<MoodGrade, string> = {
   "A+": "Sunlit", A: "Bright", "A-": "Bright", "B+": "Growing", B: "Growing", "B-": "Growing",
   "C+": "Steady", C: "Steady", "C-": "Steady", "D+": "Low tide", D: "Low tide", "D-": "Low tide", F: "Heavy",
 };
@@ -30,6 +30,11 @@ interface GardenFlowerProps {
   isNewest?: boolean;
   style?: CSSProperties;
   onActiveChange?: (isActive: boolean) => void;
+  onOpenChange?: (isOpen: boolean) => void;
+  // Off where the scene draws its own hover preview.
+  showTitle?: boolean;
+  // Off for sample data (dev previews), whose ids don't exist on the server.
+  showReactions?: boolean;
 }
 
 const getPlantTitle = (
@@ -43,10 +48,10 @@ const getPlantTitle = (
     : `${recency}Feeling: ${moodLabels[mood]}`;
 };
 
-const getJournalAriaLabel = (isMostRecent: boolean, mood: MoodGrade) =>
+export const getJournalAriaLabel = (isMostRecent: boolean, mood: MoodGrade) =>
   `Open ${isMostRecent ? "most recently planted " : ""}${moodLabels[mood]} journal`;
 
-const PlantReaction = ({
+export const PlantReaction = ({
   postId,
   isOpen,
 }: {
@@ -106,7 +111,7 @@ const PlantReaction = ({
   );
 };
 
-const JournalTypewriter = ({ text }: { text: string }) => {
+export const JournalTypewriter = ({ text }: { text: string }) => {
   const characters = Array.from(text);
   const [visibleCount, setVisibleCount] = useState(0);
   const [showAll, setShowAll] = useState(false);
@@ -159,6 +164,9 @@ export const GardenFlower = ({
   isNewest = false,
   style,
   onActiveChange,
+  onOpenChange,
+  showTitle = true,
+  showReactions = true,
 }: GardenFlowerProps) => {
   const isPrivate = visibility === "private";
   const [isOpen, setIsOpen] = useState(false);
@@ -166,7 +174,7 @@ export const GardenFlower = ({
   const triggerProps = {
     className: "absolute -translate-x-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
     style,
-    title: getPlantTitle(isPrivate, isNewest, mood),
+    title: showTitle ? getPlantTitle(isPrivate, isNewest, mood) : undefined,
     onPointerEnter: () => onActiveChange?.(true),
     onPointerLeave: () => onActiveChange?.(false),
     onFocus: () => onActiveChange?.(true),
@@ -190,7 +198,13 @@ export const GardenFlower = ({
   );
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
+    <Popover
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        onOpenChange?.(open);
+      }}
+    >
       <PopoverTrigger
         {...triggerProps}
         aria-label={getJournalAriaLabel(isNewest, mood)}
@@ -220,7 +234,7 @@ export const GardenFlower = ({
           <span className="text-xs text-muted-foreground">
             {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
           </span>
-          <PlantReaction postId={postId} isOpen={isOpen} />
+          {showReactions ? <PlantReaction postId={postId} isOpen={isOpen} /> : null}
         </div>
       </PopoverContent>
     </Popover>

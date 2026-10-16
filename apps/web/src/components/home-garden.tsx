@@ -2,17 +2,18 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { useConvex, useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
 import { getCalendarDate } from "@/lib/calendar-date";
-import type { WorldGardenEntry } from "./world-garden-scene";
+import type { WaterResult, WorldGardenEntry } from "./world-garden-scene";
 
 const HomeGardenSkeleton = () => (
   <div
     role="status"
     aria-label="Growing your garden"
-    className="grid h-[clamp(26rem,calc(100svh-9rem),56rem)] w-full place-items-center"
+    className="-mx-4 -mb-32 grid h-[calc(100svh-4.85rem)] w-[calc(100%+2rem)] place-items-center sm:mx-0 sm:mb-0 sm:h-[clamp(26rem,calc(100svh-9rem),56rem)] sm:w-full"
   >
     <span
       aria-hidden="true"
@@ -35,6 +36,19 @@ export const HomeGarden = () => {
   const myPosts = useQuery(api.posts.getByUserId, myId ? { userId: myId } : "skip");
   const { results, status } = usePaginatedQuery(api.posts.getAll, {}, { initialNumItems: 300 });
   const [today] = useState(() => new Date());
+  const convex = useConvex();
+  const toggleWater = useMutation(api.reactions.toggle);
+
+  // Watering from the world only ever adds water; it never takes it away.
+  const water = async (postId: string): Promise<WaterResult> => {
+    if (!myId) return "signedOut";
+    const id = postId as Id<"posts">;
+    const status = await convex.query(api.reactions.getForPost, { postId: id });
+    if (!status?.canReact) return status?.unavailableReason === "signedOut" ? "signedOut" : "unavailable";
+    if (status.viewerReacted) return "already";
+    await toggleWater({ postId: id });
+    return "watered";
+  };
 
   const me = useMemo<WorldGardenEntry | null>(() => {
     if (!myId || !myPosts) return null;
@@ -60,5 +74,5 @@ export const HomeGarden = () => {
   }, [results, myId, today]);
 
   if (isPending || (myId && myPosts === undefined) || status === "LoadingFirstPage") return <HomeGardenSkeleton />;
-  return <WorldGardenScene me={me} others={others} />;
+  return <WorldGardenScene me={me} others={others} onWater={water} />;
 };

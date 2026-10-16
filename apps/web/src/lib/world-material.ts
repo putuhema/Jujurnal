@@ -23,6 +23,9 @@ const fragmentPars = /* glsl */ `
   uniform vec2 uFocus;
   uniform vec2 uFade;
   varying vec2 vWorldXZ;
+  #ifdef WORLD_GRAY_UNIFORM
+    uniform float uGrayMix;
+  #endif
 `;
 
 const fragmentFade = /* glsl */ `
@@ -38,6 +41,10 @@ const fragmentGray = /* glsl */ `
     float worldLuma = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
     outgoingLight = mix(outgoingLight, vec3(worldLuma) * vec3(1.0, 0.985, 0.96), WORLD_GRAY);
   #endif
+  #ifdef WORLD_GRAY_UNIFORM
+    float worldLumaMix = dot(outgoingLight, vec3(0.299, 0.587, 0.114));
+    outgoingLight = mix(outgoingLight, vec3(worldLumaMix) * vec3(1.0, 0.985, 0.96), uGrayMix * 0.92);
+  #endif
   #include <opaque_fragment>
 `;
 
@@ -45,10 +52,13 @@ export const createWorldMaterial = ({
   gray,
   doubleSide = false,
   opacity = 1,
+  grayMix,
 }: {
   gray: boolean;
   doubleSide?: boolean;
   opacity?: number;
+  // An animatable gray amount (0 colour, 1 gray) instead of a fixed one.
+  grayMix?: { value: number };
 }) => {
   const material = new THREE.MeshLambertMaterial({
     vertexColors: true,
@@ -57,8 +67,9 @@ export const createWorldMaterial = ({
     opacity,
   });
   if (gray) material.defines = { WORLD_GRAY: "0.92" };
+  if (grayMix) material.defines = { WORLD_GRAY_UNIFORM: "" };
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, worldUniforms);
+    Object.assign(shader.uniforms, worldUniforms, grayMix ? { uGrayMix: grayMix } : {});
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", `#include <common>\n${vertexPars}`)
       .replace("#include <project_vertex>", vertexWorld);
@@ -67,7 +78,7 @@ export const createWorldMaterial = ({
       .replace("#include <clipping_planes_fragment>", fragmentFade)
       .replace("#include <opaque_fragment>", fragmentGray);
   };
-  material.customProgramCacheKey = () => `jujurnal-world-${gray}`;
+  material.customProgramCacheKey = () => `jujurnal-world-${grayMix ? "mix" : gray}`;
   return material;
 };
 
