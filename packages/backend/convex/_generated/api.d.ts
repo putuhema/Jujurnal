@@ -10,6 +10,9 @@
 
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
+import type * as garden from "../garden.js";
+import type * as gardenItems from "../gardenItems.js";
+import type * as gifts from "../gifts.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
@@ -22,6 +25,7 @@ import type * as reminderSchedule from "../reminderSchedule.js";
 import type * as reminders from "../reminders.js";
 import type * as streak from "../streak.js";
 import type * as types from "../types.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +36,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
+  garden: typeof garden;
+  gardenItems: typeof gardenItems;
+  gifts: typeof gifts;
   healthCheck: typeof healthCheck;
   helpers: typeof helpers;
   http: typeof http;
@@ -44,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   reminders: typeof reminders;
   streak: typeof streak;
   types: typeof types;
+  users: typeof users;
 }>;
 
 /**

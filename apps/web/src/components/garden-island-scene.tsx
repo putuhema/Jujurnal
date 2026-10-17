@@ -15,6 +15,7 @@ import {
 } from "@/lib/garden-procedural";
 import { usePrefersReducedMotion } from "@/lib/use-reduced-motion";
 import { GardenLights, GardenPlant, surfaceMaterial, waterMaterial } from "./garden-three";
+import { NewBeam } from "./garden-highlights";
 import { GardenFlower } from "./garden-flower";
 import { useGardenZoom } from "./garden-zoom";
 import type { IslandPost } from "./island-garden";
@@ -191,11 +192,15 @@ export default function GardenIslandScene({
                   growth={getPlantGrowth(post._creationTime, now)}
                   delay={index * stagger}
                   isActive={activePostId === post._id}
-                  isHighlighted={activePostId === post._id || post._id === newestPostId}
+                  isHighlighted={activePostId === post._id}
                   animate={!prefersReducedMotion}
                 />
               );
             })}
+            {/* A journal from the last day still glows with its beam of light. */}
+            {newestPostId && now - (sortedPosts.at(-1)?._creationTime ?? 0) < 86_400_000 && layout.plots[sortedPosts.length - 1] ? (
+              <NewBeam position={layout.plots[sortedPosts.length - 1]} />
+            ) : null}
             </group>
             </group>
           </Canvas>

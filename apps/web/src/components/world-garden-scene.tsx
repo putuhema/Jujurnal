@@ -13,12 +13,23 @@ import {
   type RefObject,
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Globe, History, Map as MapIcon, Minus, Pause, Play, Plus, RotateCcw, RotateCw, SlidersHorizontal, Sprout, X } from "lucide-react";
+import { Gift as GiftIcon, Globe, History, Inbox, Map as MapIcon, Minus, Pause, Play, Plus, RotateCcw, RotateCw, Shovel, SlidersHorizontal, Sprout, Share2, Volume2, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { getCalendarDate } from "@/lib/calendar-date";
 import { cn, glassSurface } from "@/lib/utils";
-import { createPlant, getPlantGrowth, type GardenLayout, type PlantModel } from "@/lib/garden-procedural";
+import { createPlant, createRandom, getPlantGrowth, type GardenLayout, type MoodGrade, type PlantModel } from "@/lib/garden-procedural";
+import { arrangePlots, cellAt, emptyArrangement, freeCells, type Arrangement } from "@/lib/garden-arrangement";
+import { getAtmosphereLook, getDayPart, getSeason, getWeather, describeAtmosphere, type Atmosphere, type DayPart, type Season, type Weather } from "@/lib/garden-atmosphere";
+import { makePostcard, sharePostcard } from "@/lib/garden-postcard";
+import { startAmbience, stopAmbience, updateAmbience } from "@/lib/garden-sounds";
+import type { GiftKind } from "@puma-brain/backend/convex/gardenItems";
+import { Bee, Cat, Decoration, FreeCellMarkers, Frog, Gift } from "./garden-objects";
+import { Fireflies, WeatherEffects, useAtmosphereLights } from "./garden-weather";
+import { GardenEditor, type EditorHeld } from "./garden-editor";
+import { BloomBurst, NewBeam } from "./garden-highlights";
+import { moodLabels } from "./garden-flower";
+import { GiftComposer, GiftInbox, type GiftView } from "./garden-gifts";
 import {
   applyWorldView,
   createPieceLayout,
@@ -43,7 +54,20 @@ import { Slider } from "./ui/slider";
 
 // The world only carries what it draws; a journal's words arrive when it's opened.
 export type WorldPost = Omit<IslandPost, "body"> & { body?: string };
-export type WorldGardenEntry = { userId: string; name: string; posts: WorldPost[] };
+export type WorldGardenEntry = { userId: string; name: string; posts: WorldPost[]; arrangement?: Arrangement };
+
+// Your own garden's extras: how it's arranged, what's unlocked, your recent
+// moods (the weather) and gifts left by visitors. Omitted in demos.
+export type MyGarden = {
+  arrangement: Arrangement;
+  longestStreak: number;
+  recentMoods: MoodGrade[];
+  gifts: GiftView[];
+  onSaveArrangement: (arrangement: Arrangement) => void;
+  onSendGift: (toUserId: string, kind: GiftKind, note: string) => Promise<void>;
+  onMarkGiftsRead: () => void;
+  onRemoveGift: (id: string) => void;
+};
 export type WaterResult = "watered" | "already" | "signedOut" | "unavailable";
 
 type Placement = {
@@ -200,7 +224,8 @@ const sortByTime = (posts: WorldPost[]) => [...posts].sort((a, b) => a._creation
 
 function* buildOtherPiece(placement: Placement, now: number): PieceJob {
   const posts = sortByTime(placement.garden.posts);
-  const layout = createPieceLayout(placement.garden.userId, placement.gx, placement.gz, posts.length);
+  const created = createPieceLayout(placement.garden.userId, placement.gx, placement.gz, posts.length);
+  const layout = { ...created, plots: arrangePlots(created, posts.map((post) => post._id), placement.garden.arrangement, placement.center) };
   yield { layout };
   const plants = yield* growPiecePlants(posts, layout, now);
   yield { plants };
@@ -227,6 +252,22 @@ const usePlantModels = (posts: WorldPost[], detail = 1) => {
     cache.current.clear();
   }, []);
   return models;
+};
+
+// A few colours from the top of a plant (its petals), for the bloom burst.
+const petalColors = (model: PlantModel) => {
+  const position = model.geometry.attributes.position.array as Float32Array;
+  const color = model.geometry.attributes.color?.array as Float32Array | undefined;
+  const picks: string[] = [];
+  if (color) {
+    const count = position.length / 3;
+    const step = Math.max(1, Math.floor(count / 600));
+    for (let index = 0; index < count && picks.length < 6; index += step) {
+      if (position[index * 3 + 1] < model.height * 0.72) continue;
+      picks.push(`#${new THREE.Color(color[index * 3], color[index * 3 + 1], color[index * 3 + 2]).getHexString()}`);
+    }
+  }
+  return picks.length ? [...picks, "#fff6d8"] : ["#ffd166", "#f78fb3", "#fff6d8"];
 };
 
 const dayOfMonth = (post: WorldPost) => Number(getCalendarDate(post._creationTime, post.entryDate).date.slice(8, 10));
@@ -477,8 +518,11 @@ const WaterSplash = ({ effect, now, still, onDone }: { effect: WaterEffect; now:
   );
 };
 
-const WorldLights = ({ current, aspect, mapSize }: { current: RefObject<WorldView>; aspect: number; mapSize: number }) => {
+const WorldLights = ({ current, aspect, mapSize, look }: { current: RefObject<WorldView>; aspect: number; mapSize: number; look: ReturnType<typeof getAtmosphereLook> }) => {
   const light = useRef<THREE.DirectionalLight>(null);
+  const hemisphere = useRef<THREE.HemisphereLight>(null);
+  // Time of day and weather tint and dim the light.
+  useAtmosphereLights(look, hemisphere, light);
   const target = useMemo(() => new THREE.Object3D(), []);
   const shadowReach = useRef(0);
   const center = useMemo(() => new THREE.Vector3(), []);
@@ -515,11 +559,12 @@ const WorldLights = ({ current, aspect, mapSize }: { current: RefObject<WorldVie
 
   return (
     <>
-      <hemisphereLight args={["#fff4dc", "#5d7a4c", 1.5]} />
+      <hemisphereLight ref={hemisphere} args={[look.hemisphere.sky, look.hemisphere.ground, look.hemisphere.intensity]} />
       <primitive object={target} />
       <directionalLight
         ref={light}
         target={target}
+        // Starting value only; useAtmosphereLights eases it toward the look.
         intensity={2.1}
         castShadow
         shadow-mapSize={[mapSize, mapSize]}
@@ -620,6 +665,17 @@ const ViewController = ({
   return null;
 };
 
+type Snapshot = { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera };
+
+// Hands the renderer to the postcard button, outside the canvas.
+const SnapshotBridge = ({ snapshot }: { snapshot: RefObject<Snapshot | null> }) => {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    snapshot.current = { renderer: gl, scene, camera };
+  }, [gl, scene, camera, snapshot]);
+  return null;
+};
+
 const InvalidateBridge = ({ invalidate }: { invalidate: RefObject<(() => void) | null> }) => {
   const fn = useThree((state) => state.invalidate);
   useEffect(() => {
@@ -642,10 +698,12 @@ export default function WorldGardenScene({
   me,
   others,
   onWater,
+  garden,
   demo = false,
 }: {
   me: WorldGardenEntry | null;
   others: WorldGardenEntry[];
+  garden?: MyGarden;
   // Sample data: skip anything that would ask the server about these posts.
   demo?: boolean;
   // Waters someone else's journal; the scene plays the animation on success.
@@ -670,6 +728,10 @@ export default function WorldGardenScene({
   const [waterEffects, setWaterEffects] = useState<WaterEffect[]>([]);
   // The journal being read in the side panel.
   const [focusPostId, setFocusPostId] = useState<string | null>(null);
+  // The newest journal you've opened; a newer one gets a beam of light until you do.
+  const [seenNewest, setSeenNewest] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : window.localStorage.getItem("bloom-seen-newest")
+  );
   const readingDim = useRef(0);
   const screenOffset = useRef({ x: 0, y: 0 });
   const [now] = useState(() => Date.now());
@@ -677,6 +739,7 @@ export default function WorldGardenScene({
   const cache = useMemo(() => new PieceCache(), []);
   useEffect(() => () => cache.dispose(), [cache]);
   const invalidate = useRef<(() => void) | null>(null);
+  const snapshot = useRef<Snapshot | null>(null);
   const pointerTarget = useRef(0);
   const visitGray = useRef(GRAY);
   const coarsePointer = useSyncExternalStore(
@@ -694,7 +757,7 @@ export default function WorldGardenScene({
     return gardens.map((garden, index) => {
       const [gx, gz] = coordinates[index];
       return {
-        key: `${garden.userId}:${gx}:${gz}:${garden.posts.map((post) => `${post._id}${post.mood}${post.reactionCount ?? 0}`).join("")}`,
+        key: `${garden.userId}:${gx}:${gz}:${garden.posts.map((post) => `${post._id}${post.mood}${post.reactionCount ?? 0}`).join("")}:${garden.arrangement?.moves.map((move) => `${move.postId}${move.x},${move.z}`).join("") ?? ""}`,
         slot: `${garden.userId}:${gx}:${gz}`,
         garden,
         gx,
@@ -716,6 +779,23 @@ export default function WorldGardenScene({
     myLayout?.decor?.dispose();
   }, [myLayout]);
 
+  // --- Arranging your garden: your moves and decorations, saved as you go ---
+  const [draft, setDraft] = useState<Arrangement | null>(null);
+  const arrangement = draft ?? garden?.arrangement ?? me?.arrangement ?? emptyArrangement;
+  const [editing, setEditing] = useState(false);
+  const [held, setHeld] = useState<EditorHeld>(null);
+  const homeCenter = useMemo(() => ({ x: 0, z: 0 }), []);
+  const myArranged = useMemo(
+    () => (myLayout ? { ...myLayout, plots: arrangePlots(myLayout, myPosts.map((post) => post._id), arrangement, homeCenter) } : null),
+    [myLayout, myPosts, arrangement, homeCenter]
+  );
+  const saveTimer = useRef<number | undefined>(undefined);
+  const changeArrangement = (next: Arrangement) => {
+    setDraft(next);
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => garden?.onSaveArrangement(next), 500);
+  };
+
   // --- The garden you're visiting ---
   const visitPosts = useMemo(() => sortByTime(visit?.placement.garden.posts ?? []), [visit?.placement]);
   const visitLayout = useMemo(
@@ -723,6 +803,13 @@ export default function WorldGardenScene({
     [visit?.placement, visitPosts.length]
   );
   const visitPlants = usePlantModels(visitPosts);
+  const visitArranged = useMemo(
+    () =>
+      visitLayout && visit
+        ? { ...visitLayout, plots: arrangePlots(visitLayout, visitPosts.map((post) => post._id), visit.placement.garden.arrangement, visit.placement.center) }
+        : null,
+    [visitLayout, visit, visitPosts]
+  );
   useEffect(() => () => {
     visitLayout?.island.dispose();
     visitLayout?.water?.dispose();
@@ -744,8 +831,9 @@ export default function WorldGardenScene({
     setVisit(null);
     setMode("garden");
     if (!still) setPlanting({ postId: added._id, key: Date.now() });
-    // Felt as the seed lands.
+    // Felt as the seed lands, and heard as the flower opens.
     window.setTimeout(() => buzz(20), PLANTING.seedFall * 1000);
+    window.setTimeout(() => playGardenSound("bloom"), (PLANTING.growDelay + 0.3) * 1000);
   }, [myPosts, still]);
   useEffect(() => {
     if (!planting) return;
@@ -753,7 +841,7 @@ export default function WorldGardenScene({
     return () => window.clearTimeout(timer);
   }, [planting]);
   const plantingIndex = planting ? myPosts.findIndex((post) => post._id === planting.postId) : -1;
-  const plantingPlot = plantingIndex >= 0 ? myLayout?.plots[plantingIndex] : undefined;
+  const plantingPlot = plantingIndex >= 0 ? myArranged?.plots[plantingIndex] : undefined;
 
   // --- Replay: rebuild the month day by day ---
   const lastDay = myPosts.length ? Math.max(...myPosts.map(dayOfMonth)) : 1;
@@ -769,10 +857,10 @@ export default function WorldGardenScene({
 
   // --- Journals you can read: yours in garden mode, theirs while visiting ---
   const readable =
-    mode === "garden" && me && myLayout
-      ? { posts: myPosts, layout: myLayout, models: myPlants, owner: undefined }
-      : mode === "visit" && visit && !visit.leaving && visitLayout
-        ? { posts: visitPosts, layout: visitLayout, models: visitPlants, owner: visit.placement.garden.name }
+    mode === "garden" && me && myArranged
+      ? { posts: myPosts, layout: myArranged, models: myPlants, owner: undefined }
+      : mode === "visit" && visit && !visit.leaving && visitArranged
+        ? { posts: visitPosts, layout: visitArranged, models: visitPlants, owner: visit.placement.garden.name }
         : null;
   const readingIndex = focusPostId && readable ? readable.posts.findIndex((post) => post._id === focusPostId) : -1;
   const reading = readingIndex >= 0 && readable ? { post: readable.posts[readingIndex], plot: readable.layout.plots[readingIndex] } : null;
@@ -780,6 +868,90 @@ export default function WorldGardenScene({
   useEffect(() => {
     if (focusPostId && readingIndex < 0) setFocusPostId(null);
   }, [focusPostId, readingIndex]);
+
+  // --- Atmosphere: time of day, season, and weather from the last week of moods ---
+  const [clock, setClock] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 5 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  // Development only: ?daypart=night&weather=rain&season=winter previews any sky.
+  const [preview] = useState(() => {
+    if (process.env.NODE_ENV === "production" || typeof window === "undefined") return {};
+    const params = new URLSearchParams(window.location.search);
+    return {
+      dayPart: (params.get("daypart") ?? undefined) as DayPart | undefined,
+      weather: (params.get("weather") ?? undefined) as Weather | undefined,
+      season: (params.get("season") ?? undefined) as Season | undefined,
+    };
+  });
+  const weatherMoods =
+    mode === "visit" ? [...visitPosts].reverse().map((post) => post.mood) : garden?.recentMoods ?? [...myPosts].reverse().map((post) => post.mood);
+  const atmosphere: Atmosphere = {
+    dayPart: preview.dayPart ?? getDayPart(clock),
+    season: preview.season ?? getSeason(clock),
+    weather: preview.weather ?? getWeather(weatherMoods),
+  };
+  const look = useMemo(() => getAtmosphereLook(atmosphere), [atmosphere.dayPart, atmosphere.season, atmosphere.weather]);
+  const night = atmosphere.dayPart === "night";
+
+  // --- Panels and sound ---
+  const [panel, setPanel] = useState<"gift" | "inbox" | null>(null);
+  const [soundOn, setSoundOn] = useState(false);
+  const unreadGifts = garden?.gifts.filter((gift) => !gift.read).length ?? 0;
+  useEffect(() => {
+    if (soundOn) updateAmbience(atmosphere);
+  }, [soundOn, atmosphere.dayPart, atmosphere.weather]);
+  useEffect(() => () => stopAmbience(), []);
+  const toggleSound = () => {
+    if (soundOn) {
+      stopAmbience();
+      setSoundOn(false);
+    } else if (startAmbience(atmosphere)) setSoundOn(true);
+  };
+
+  // --- Critters and gifts: who's living in the garden you're looking at ---
+  const [pokes, setPokes] = useState({ cat: 0, frog: 0, bee: 0 });
+  const residents = useMemo(() => {
+    const scene =
+      mode === "visit" && visitArranged && visit
+        ? { layout: visitArranged, posts: visitPosts, models: visitPlants, center: visit.placement.center, seed: visit.placement.garden.userId, decorations: visit.placement.garden.arrangement?.decorations ?? [], gifts: [] as GiftView[] }
+        : myArranged && me && mode !== "world"
+          ? { layout: myArranged, posts: myPosts, models: myPlants, center: new THREE.Vector3(), seed: me.userId, decorations: arrangement.decorations, gifts: (garden?.gifts ?? []).slice(0, 12) }
+          : null;
+    if (!scene) return null;
+    const open = freeCells(scene.layout, scene.layout.plots, scene.decorations, scene.center).sort((a, b) => a.x - b.x || a.z - b.z);
+    const take = (seed: string) => {
+      if (!open.length) return null;
+      const index = Math.floor(createRandom(seed).next() * open.length);
+      const [cell] = open.splice(index, 1);
+      return { x: cell.x, y: cell.top, z: cell.z };
+    };
+    // A cat naps in gardens with plenty of steady days.
+    const steady = scene.posts.filter((post) => post.mood.startsWith("C")).length;
+    const cat = steady >= 3 ? take(`cat:${scene.seed}`) : null;
+    // A frog lives on the pond, if there is one.
+    const pond = scene.layout.cells.find((cell) => cell.kind === "water");
+    const frog = pond ? { x: pond.x, y: pond.top + 0.03, z: pond.z } : null;
+    // A bee visits the most-watered flower.
+    let beeIndex = -1;
+    scene.posts.forEach((post, index) => {
+      if ((post.reactionCount ?? 0) > 0 && (beeIndex < 0 || (post.reactionCount ?? 0) > (scene.posts[beeIndex].reactionCount ?? 0))) beeIndex = index;
+    });
+    const beePlot = beeIndex >= 0 ? scene.layout.plots[beeIndex] : undefined;
+    const bee = beePlot
+      ? { spot: { x: beePlot.x, y: beePlot.y, z: beePlot.z }, height: scene.models[beeIndex].height * getPlantGrowth(scene.posts[beeIndex]._creationTime, now) }
+      : null;
+    const gifts = scene.gifts.flatMap((gift) => {
+      const spot = take(`gift:${gift._id}`);
+      return spot ? [{ gift, spot }] : [];
+    });
+    const decorations = scene.decorations.flatMap((decoration) => {
+      const cell = cellAt(scene.layout, scene.center.x + decoration.x, scene.center.z + decoration.z);
+      return cell && cell.kind === "grass" ? [{ decoration, spot: { x: cell.x, y: cell.top, z: cell.z } }] : [];
+    });
+    return { cat, frog, bee, gifts, decorations, center: scene.center, seed: scene.seed, free: open };
+  }, [mode, visitArranged, visit, visitPosts, visitPlants, myArranged, me, myPosts, myPlants, arrangement, garden?.gifts, now]);
 
   // --- Camera framing ---
   const home = mine?.center ?? placements[0]?.center ?? new THREE.Vector3();
@@ -867,6 +1039,9 @@ export default function WorldGardenScene({
   };
 
   const goTo = (next: Mode) => {
+    setEditing(false);
+    setHeld(null);
+    setPanel(null);
     setGardenZoom(1);
     setSelected(null);
     setReplay(null);
@@ -877,6 +1052,7 @@ export default function WorldGardenScene({
 
   const startVisit = (placement: Placement) => {
     if (placement.isMine) return goTo("garden");
+    setPanel(null);
     setSelected(null);
     setGardenZoom(1);
     visitGray.current = GRAY;
@@ -1070,8 +1246,94 @@ export default function WorldGardenScene({
   const screenRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).setY(0).normalize().multiplyScalar(0.5);
 
   const newestPostId = myPosts.at(-1)?._id;
+  // Opening the newest journal puts its beam out.
+  useEffect(() => {
+    if (!focusPostId || focusPostId !== newestPostId) return;
+    setSeenNewest(focusPostId);
+    window.localStorage.setItem("bloom-seen-newest", focusPostId);
+  }, [focusPostId, newestPostId]);
+  const beamPlot =
+    newestPostId && newestPostId !== seenNewest && !planting && !editing && !replay && myArranged ? myArranged.plots[myPosts.length - 1] : undefined;
+  const burstColors = useMemo(
+    () => (planting && plantingIndex >= 0 && myPlants[plantingIndex] ? petalColors(myPlants[plantingIndex]) : null),
+    [planting, plantingIndex, myPlants]
+  );
+  const plantingPost = plantingIndex >= 0 ? myPosts[plantingIndex] : undefined;
   const isShown = (post: WorldPost) => !replay || dayOfMonth(post) <= replay.day;
   const monthLabel = new Date(now).toLocaleString(undefined, { month: "long" });
+
+  // --- Arranging: tap a flower or decoration to pick it up, then an empty spot to put it down ---
+  const startEditing = () => {
+    setFocusPostId(null);
+    setReplay(null);
+    setPanel(null);
+    setToolsOpen(false);
+    setHeld(null);
+    setEditing(true);
+  };
+  const handleEditTap = (clientX: number, clientY: number, rect: DOMRect) => {
+    if (!myArranged) return;
+    raycaster.setFromCamera(new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1), camera);
+    const point = new THREE.Vector3();
+    if (!raycaster.ray.intersectPlane(groundPlane, point)) return;
+    const cell = cellAt(myArranged, point.x, point.z);
+    if (!cell) return setHeld(null);
+    const local = { x: cell.x - homeCenter.x, z: cell.z - homeCenter.z };
+    const plantIndex = myArranged.plots.findIndex((plot) => Math.round(plot.x) === cell.x && Math.round(plot.z) === cell.z);
+    const decoration = arrangement.decorations.find((item) => item.x === local.x && item.z === local.z);
+    const isFree = cell.kind === "grass" && plantIndex < 0 && !decoration;
+    playGardenSound("click");
+    buzz(8);
+    if (held && isFree) {
+      if (held.type === "plant") {
+        changeArrangement({ ...arrangement, moves: [...arrangement.moves.filter((move) => move.postId !== held.postId), { postId: held.postId, ...local }] });
+      } else if (held.type === "new") {
+        if (arrangement.decorations.length >= 24) return void toast("Your garden is full of decorations. Remove one to add another.");
+        changeArrangement({ ...arrangement, decorations: [...arrangement.decorations, { id: crypto.randomUUID(), kind: held.kind, ...local, turn: 0 }] });
+      } else {
+        changeArrangement({ ...arrangement, decorations: arrangement.decorations.map((item) => (item.id === held.id ? { ...item, ...local } : item)) });
+      }
+      setHeld(null);
+      return;
+    }
+    if (held && !isFree && cell.kind !== "grass") return void toast("Flowers and decorations need grass to sit on.");
+    if (plantIndex >= 0) setHeld({ type: "plant", postId: myPosts[plantIndex]._id });
+    else if (decoration) setHeld({ type: "decoration", id: decoration.id });
+    else setHeld(null);
+  };
+  const heldDecoration = held?.type === "decoration" ? arrangement.decorations.find((item) => item.id === held.id) : undefined;
+
+  // --- Postcard ---
+  const [sharing, setSharing] = useState(false);
+  const shareGarden = async () => {
+    const shot = snapshot.current;
+    if (!shot) return;
+    setToolsOpen(false);
+    setSharing(true);
+    try {
+      const flowers = myPosts.length;
+      const streak = garden?.longestStreak ? ` · best streak ${garden.longestStreak} days` : "";
+      const blob = await makePostcard({
+        ...shot,
+        title: `My ${monthLabel} in Bloom`,
+        subtitle: `${flowers} ${flowers === 1 ? "flower" : "flowers"} · ${describeAtmosphere(atmosphere).toLowerCase()}${streak}`,
+        sky: look.sky,
+      });
+      const outcome = await sharePostcard(blob, `bloom-${monthLabel.toLowerCase()}.png`, `My ${monthLabel} in Bloom`);
+      if (outcome.result === "downloaded") toast.success("Postcard saved to your downloads");
+      if (outcome.result === "needsTap") toast("Your postcard is ready", { action: { label: "Share", onClick: () => void outcome.share() } });
+    } catch {
+      toast.error("Couldn't make the postcard. Try again?");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const poke = (critter: "cat" | "frog" | "bee") => {
+    setPokes((current) => ({ ...current, [critter]: current[critter] + 1 }));
+    playGardenSound(critter === "cat" ? "purr" : critter === "frog" ? "ribbit" : "buzz");
+    buzz(critter === "cat" ? [8, 30, 8, 30, 8] : 12);
+  };
 
   return (
     <div
@@ -1099,6 +1361,12 @@ export default function WorldGardenScene({
         event.stopPropagation();
       }}
       onClick={(event) => {
+        if (editing) {
+          if (!(event.target as HTMLElement).closest("button, [data-world-control]")) {
+            handleEditTap(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
+          }
+          return;
+        }
         // Fingers are imprecise: a tap that lands near a plant, but not on its
         // button, opens the closest one (measured to its stem, base to top).
         if (!showHitAreas || !interactive || (event.target as HTMLElement).closest("button, [data-world-control]")) return;
@@ -1131,6 +1399,12 @@ export default function WorldGardenScene({
         }
       }}
     >
+      {/* The sky: time of day and the week's weather. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-10 transition-opacity duration-700"
+        style={{ background: `linear-gradient(to bottom, ${look.sky[0]}, ${look.sky[1]})` }}
+      />
       {size ? (
         <Canvas
           camera={camera}
@@ -1160,7 +1434,31 @@ export default function WorldGardenScene({
             }}
             onFocusChange={setFocus}
           />
-          <WorldLights current={current} aspect={aspect} mapSize={coarsePointer ? SHADOW_MAP_SIZE.coarse : SHADOW_MAP_SIZE.fine} />
+          <WorldLights current={current} aspect={aspect} mapSize={coarsePointer ? SHADOW_MAP_SIZE.coarse : SHADOW_MAP_SIZE.fine} look={look} />
+          <SnapshotBridge snapshot={snapshot} />
+          <WeatherEffects atmosphere={atmosphere} view={current} still={still} />
+          {night && residents ? <Fireflies key={`${residents.center.x},${residents.center.z}`} center={residents.center} spread={3.6} still={still} /> : null}
+          {residents ? (
+            <>
+              {residents.decorations.map(({ decoration, spot }) => (
+                <Decoration
+                  key={decoration.id}
+                  kind={decoration.kind}
+                  spot={spot}
+                  turn={decoration.turn}
+                  night={night}
+                  selected={editing && held?.type === "decoration" && held.id === decoration.id}
+                />
+              ))}
+              {residents.gifts.map(({ gift, spot }) => (
+                <Gift key={gift._id} id={gift._id} kind={gift.kind} spot={spot} still={still} />
+              ))}
+              {residents.cat ? <Cat spot={residents.cat} seed={residents.seed} poke={pokes.cat} still={still} /> : null}
+              {residents.frog ? <Frog spot={residents.frog} poke={pokes.frog} still={still} /> : null}
+              {residents.bee ? <Bee spot={residents.bee.spot} height={residents.bee.height} poke={pokes.bee} still={still} /> : null}
+              {editing && held ? <FreeCellMarkers cells={residents.free.map((cell) => ({ x: cell.x, y: cell.top, z: cell.z }))} /> : null}
+            </>
+          ) : null}
           <ReadingDim dim={readingDim} reading={isReading} still={still} />
 
           {visible.map((placement) =>
@@ -1177,10 +1475,10 @@ export default function WorldGardenScene({
             )
           )}
 
-          {visit && visitLayout ? (
+          {visit && visitArranged ? (
             <VisitedPiece
               key={visit.placement.slot}
-              layout={visitLayout}
+              layout={visitArranged}
               posts={visitPosts}
               models={visitPlants}
               gray={visitGray}
@@ -1194,7 +1492,7 @@ export default function WorldGardenScene({
             />
           ) : null}
 
-          {mine && myLayout && visible.includes(mine) ? (
+          {mine && myArranged && visible.includes(mine) ? (
             <group
               onClick={(event) => {
                 if (mode !== "world" || event.delta > DRAG_THRESHOLD) return;
@@ -1202,12 +1500,12 @@ export default function WorldGardenScene({
                 goTo("garden");
               }}
             >
-              <mesh geometry={myLayout.island} material={worldMaterials.ground} receiveShadow />
-              {myLayout.decor ? <mesh geometry={myLayout.decor} material={worldMaterials.ground} castShadow receiveShadow /> : null}
-              {myLayout.water ? <mesh geometry={myLayout.water} material={worldMaterials.water} /> : null}
+              <mesh geometry={myArranged.island} material={worldMaterials.ground} receiveShadow />
+              {myArranged.decor ? <mesh geometry={myArranged.decor} material={worldMaterials.ground} castShadow receiveShadow /> : null}
+              {myArranged.water ? <mesh geometry={myArranged.water} material={worldMaterials.water} /> : null}
               {myPlants.map((model, index) => {
                 const post = myPosts[index];
-                const plot = myLayout.plots[index];
+                const plot = myArranged.plots[index];
                 if (!plot) return null;
                 const isPlanting = post._id === planting?.postId;
                 return (
@@ -1219,7 +1517,9 @@ export default function WorldGardenScene({
                     delay={isPlanting ? PLANTING.growDelay : index * Math.min(0.08, 1.6 / Math.max(1, myPosts.length))}
                     isActive={activePostId === post._id || focusPostId === post._id}
                     isHighlighted={
-                      mode === "garden" && !replay && (focusPostId ? focusPostId === post._id : activePostId === post._id || post._id === newestPostId)
+                      editing
+                        ? held?.type === "plant" && held.postId === post._id
+                        : mode === "garden" && !replay && (focusPostId ? focusPostId === post._id : activePostId === post._id)
                     }
                     animate={!still}
                     shown={isShown(post)}
@@ -1230,6 +1530,10 @@ export default function WorldGardenScene({
               {planting && plantingPlot ? (
                 <SeedDrop key={planting.key} position={new THREE.Vector3(plantingPlot.x, plantingPlot.y, plantingPlot.z)} />
               ) : null}
+              {planting && plantingPlot && burstColors && !still ? (
+                <BloomBurst key={`burst-${planting.key}`} position={plantingPlot} colors={burstColors} delay={PLANTING.growDelay + 0.75} />
+              ) : null}
+              {beamPlot ? <NewBeam key={newestPostId} position={beamPlot} /> : null}
             </group>
           ) : null}
 
@@ -1239,7 +1543,36 @@ export default function WorldGardenScene({
         </Canvas>
       ) : null}
 
-      {showHitAreas && interactive
+      {showHitAreas && residents && !editing
+        ? (
+            [
+              ["cat", residents.cat, "Pet the cat", 0.22],
+              ["frog", residents.frog, "Poke the frog", 0.1],
+              // Above the flower's bloom, so tapping the flower still opens its journal.
+              ["bee", residents.bee ? { ...residents.bee.spot, y: residents.bee.spot.y + residents.bee.height } : null, "Say hello to the bee", 0.45],
+            ] as const
+          ).map(([critter, spot, label, lift]) => {
+            if (!spot) return null;
+            const at = projectPoint(camera, spot.x, spot.y + lift, spot.z);
+            return (
+              <button
+                key={critter}
+                type="button"
+                aria-label={label}
+                title={label}
+                onClick={() => poke(critter)}
+                className={cn(
+                  "absolute z-[600] -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  // The bee circles a flower: let the flower's own button win where they overlap.
+                  critter === "bee" ? "z-[5] size-9" : "size-11",
+                )}
+                style={{ left: `${at.left}%`, top: `${at.top}%` }}
+              />
+            );
+          })
+        : null}
+
+      {showHitAreas && interactive && !editing
         ? interactive.posts.map((post, index) => {
             const plot = interactive.layout.plots[index];
             if (!plot || (mode === "garden" && !isShown(post))) return null;
@@ -1326,7 +1659,22 @@ export default function WorldGardenScene({
         </div>
       ) : null}
 
-      {replay && mode === "garden" ? (
+      {planting && plantingPost ? (
+        <div
+          key={planting.key}
+          role="status"
+          className={cn(
+            "pointer-events-none absolute top-4 left-1/2 z-[2000] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap",
+            "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-3 motion-safe:duration-500 [animation-delay:1.2s] [animation-fill-mode:both]",
+            glassSurface,
+          )}
+        >
+          <Sprout className="size-4 text-primary" aria-hidden="true" />
+          Planted today · {moodLabels[plantingPost.mood]}
+        </div>
+      ) : null}
+
+      {replay && mode === "garden" && !editing ? (
         <div
           data-world-control
           className={cn(
@@ -1358,12 +1706,60 @@ export default function WorldGardenScene({
         </div>
       ) : null}
 
+      {editing && mode === "garden" ? (
+        <GardenEditor
+          held={held}
+          longestStreak={garden?.longestStreak ?? 0}
+          onPick={(kind) => setHeld((current) => (current?.type === "new" && current.kind === kind ? null : { type: "new", kind }))}
+          onTurn={() =>
+            heldDecoration &&
+            changeArrangement({
+              ...arrangement,
+              decorations: arrangement.decorations.map((item) => (item.id === heldDecoration.id ? { ...item, turn: (item.turn + 1) % 4 } : item)),
+            })
+          }
+          onRemove={() => {
+            if (!heldDecoration) return;
+            changeArrangement({ ...arrangement, decorations: arrangement.decorations.filter((item) => item.id !== heldDecoration.id) });
+            setHeld(null);
+          }}
+          onDone={() => {
+            setEditing(false);
+            setHeld(null);
+          }}
+        />
+      ) : null}
+
+      {panel === "gift" && mode === "visit" && visit && garden ? (
+        <GiftComposer
+          name={visit.placement.garden.name}
+          onClose={() => setPanel(null)}
+          onSend={async (kind, note) => {
+            try {
+              await garden.onSendGift(visit.placement.garden.userId, kind, note);
+              playGardenSound("gift");
+              buzz([10, 30, 10]);
+              toast.success(`You left a gift for ${visit.placement.garden.name}`);
+              setPanel(null);
+            } catch (error) {
+              const data = (error as { data?: unknown }).data;
+              toast.error(typeof data === "string" ? data : "Couldn't leave the gift. Try again?");
+            }
+          }}
+        />
+      ) : null}
+
+      {panel === "inbox" && mode === "garden" && garden ? (
+        <GiftInbox gifts={garden.gifts} onRemove={garden.onRemoveGift} onClose={() => setPanel(null)} />
+      ) : null}
+
       {/* Tools tuck behind one button in the bottom-right corner, above the bottom navigation. */}
       <div
         data-world-control
         className={cn(
           "absolute right-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] flex flex-col items-center gap-2 sm:right-6 sm:bottom-6",
           isReading && "hidden sm:flex sm:right-[24rem]",
+          (editing || panel) && "hidden",
         )}
       >
         {toolsOpen ? (
@@ -1395,6 +1791,45 @@ export default function WorldGardenScene({
                 <History className="size-4" aria-hidden="true" />
               </ControlButton>
             ) : null}
+            {mode === "garden" && me ? (
+              <>
+                <ControlButton label="Arrange your garden" onClick={startEditing}>
+                  <Shovel className="size-4" aria-hidden="true" />
+                </ControlButton>
+                {garden ? (
+                  <ControlButton
+                    label={unreadGifts ? `Gifts (${unreadGifts} new)` : "Gifts"}
+                    onClick={() => {
+                      setToolsOpen(false);
+                      setPanel("inbox");
+                      if (unreadGifts) garden.onMarkGiftsRead();
+                    }}
+                  >
+                    <span className="relative">
+                      <Inbox className="size-4" aria-hidden="true" />
+                      {unreadGifts ? <span className="absolute -top-1.5 -right-1.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-card" /> : null}
+                    </span>
+                  </ControlButton>
+                ) : null}
+                <ControlButton label="Share a postcard" disabled={sharing} onClick={() => void shareGarden()}>
+                  <Share2 className="size-4" aria-hidden="true" />
+                </ControlButton>
+              </>
+            ) : null}
+            {mode === "visit" && garden ? (
+              <ControlButton
+                label="Leave a gift"
+                onClick={() => {
+                  setToolsOpen(false);
+                  setPanel("gift");
+                }}
+              >
+                <GiftIcon className="size-4" aria-hidden="true" />
+              </ControlButton>
+            ) : null}
+            <ControlButton label={soundOn ? "Turn garden sounds off" : "Turn garden sounds on"} onClick={toggleSound}>
+              {soundOn ? <Volume2 className="size-4" aria-hidden="true" /> : <VolumeX className="size-4" aria-hidden="true" />}
+            </ControlButton>
             {mode === "world" ? (
               <>
                 <ControlButton label="Zoom in (+)" disabled={worldZoom <= WORLD_ZOOM.min} onClick={() => zoomWorld(1 / WORLD_ZOOM.step)}>
@@ -1415,11 +1850,14 @@ export default function WorldGardenScene({
           aria-controls="garden-tools"
           title={toolsOpen ? "Close tools" : "Tools"}
           className={cn(
-            "flex size-12 cursor-pointer items-center justify-center rounded-full text-foreground/80 transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+            "relative flex size-12 cursor-pointer items-center justify-center rounded-full text-foreground/80 transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
             glassSurface,
           )}
         >
           {toolsOpen ? <X className="size-5" aria-hidden="true" /> : <SlidersHorizontal className="size-5" aria-hidden="true" />}
+          {!toolsOpen && unreadGifts > 0 && mode === "garden" ? (
+            <span className="absolute top-1 right-1 size-3 rounded-full bg-rose-500 ring-2 ring-card" aria-label={`${unreadGifts} new gifts`} />
+          ) : null}
         </button>
       </div>
     </div>

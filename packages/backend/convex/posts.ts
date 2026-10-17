@@ -6,10 +6,11 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import { components, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { authComponent } from "./auth";
+import { getUsersById, publicUser } from "./users";
 import { paginationOptsValidator } from "convex/server";
 import { getDateString, getDateStringForDay } from "./helpers";
 
@@ -31,28 +32,6 @@ const moodValidator = v.union(
 );
 
 const FLOWER_COUNT = 98;
-
-type AuthUser = NonNullable<Awaited<ReturnType<typeof authComponent.getAnyUserById>>>;
-
-// Looks up many authors in a single call into the auth component. Each
-// component call is a separate (serial) transaction, so one lookup per author
-// made a page of posts from a few hundred people take seconds.
-const getUsersById = async (ctx: QueryCtx, userIds: string[]) => {
-  const ids = [...new Set(userIds)];
-  const users = new Map<string, AuthUser>();
-  if (ids.length === 0) return users;
-  const result = await ctx.runQuery(components.betterAuth.adapter.findMany, {
-    model: "user",
-    where: [{ field: "_id", operator: "in", value: ids }],
-    paginationOpts: { numItems: ids.length, cursor: null },
-  });
-  for (const user of result.page as AuthUser[]) users.set(user._id, user);
-  return users;
-};
-
-// What other people may see of an author (never their email).
-const publicUser = (user: AuthUser | null | undefined) =>
-  user ? { _id: user._id, name: user.name, image: user.image ?? null } : null;
 
 const countReactions = async (ctx: QueryCtx, post: Doc<"posts">) =>
   post.reactionCount ??
@@ -89,7 +68,7 @@ export const getWorld = query({
       if (userIds.length >= WORLD_GARDENS) break;
     }
 
-    const [users, gardens] = await Promise.all([
+    const [users, gardens, layouts] = await Promise.all([
       getUsersById(ctx, userIds),
       Promise.all(
         userIds.map((userId) =>
@@ -101,6 +80,7 @@ export const getWorld = query({
             .collect()
         )
       ),
+      Promise.all(userIds.map((userId) => ctx.db.query("gardenLayouts").withIndex("by_userId", (q) => q.eq("userId", userId)).unique())),
     ]);
 
     return {
@@ -108,6 +88,7 @@ export const getWorld = query({
         userIds.map(async (userId, index) => ({
           userId,
           name: users.get(userId)?.name ?? "A gardener",
+          arrangement: layouts[index] ? { moves: layouts[index].moves, decorations: layouts[index].decorations } : undefined,
           posts: await Promise.all(
             gardens[index]
               .filter((post) => post.visibility !== "private")

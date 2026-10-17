@@ -5,13 +5,12 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { GardenPlot, PlantModel } from "@/lib/garden-procedural";
 import { createPlantMaterial, plantTime } from "@/lib/plant-material";
+import { GroundGlow } from "./garden-highlights";
 
 // Shared by the garden and the plant lab so both render plants identically.
 
 export const surfaceMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
 export const waterMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82 });
-const highlightGeometry = new THREE.RingGeometry(0.5, 0.62, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2);
-const highlightMaterial = new THREE.MeshBasicMaterial({ color: "#ffe397", transparent: true, opacity: 0.95, depthWrite: false });
 
 export const GardenLights = ({ shadowReach }: { shadowReach: number }) => (
   <>
@@ -111,7 +110,7 @@ export const GardenPlant = ({
 
   return (
     <group position={[plot.x, plot.y, plot.z]}>
-      {isHighlighted && shown ? <mesh geometry={highlightGeometry} material={highlightMaterial} position-y={0.012} /> : null}
+      {isHighlighted && shown ? <GroundGlow /> : null}
       <group
         ref={plantRef}
         rotation-z={model.lean}

@@ -2,11 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { authClient } from "@/lib/auth-client";
-import type { WaterResult, WorldGardenEntry } from "./world-garden-scene";
+import { getBrowserTimeZone } from "@/lib/calendar-date";
+import type { MyGarden, WaterResult, WorldGardenEntry } from "./world-garden-scene";
 
 const HomeGardenSkeleton = () => (
   <div
@@ -40,6 +42,13 @@ export const HomeGarden = () => {
   });
   const myPosts = useQuery(api.posts.getUserMonth, myId ? { userId: myId, month } : "skip");
   const world = useQuery(api.posts.getWorld, { month });
+  const [timeZone] = useState(getBrowserTimeZone);
+  const mine = useQuery(api.garden.getMine, myId ? { timeZone } : "skip");
+  const gifts = useQuery(api.gifts.getMine, myId ? {} : "skip");
+  const saveArrangement = useMutation(api.garden.saveArrangement);
+  const sendGift = useMutation(api.gifts.send);
+  const markGiftsRead = useMutation(api.gifts.markAllRead);
+  const removeGift = useMutation(api.gifts.remove);
   const convex = useConvex();
   const toggleWater = useMutation(api.reactions.toggle);
   // Fetch the 3D scene while the session and gardens load, not after.
@@ -63,6 +72,34 @@ export const HomeGarden = () => {
     [myId, myName, myPosts]
   );
 
+  // Your own garden's extras: arrangement, unlocks, weather and gifts.
+  const garden = useMemo<MyGarden | undefined>(
+    () =>
+      myId && mine
+        ? {
+            arrangement: { moves: mine.moves, decorations: mine.decorations },
+            longestStreak: mine.longestStreak,
+            recentMoods: mine.recentMoods,
+            gifts: gifts ?? [],
+            onSaveArrangement: (arrangement) =>
+              void saveArrangement({
+                timeZone,
+                moves: arrangement.moves.map((move) => ({ ...move, postId: move.postId as Id<"posts"> })),
+                decorations: arrangement.decorations,
+              }).catch((error: unknown) => {
+                const data = (error as { data?: unknown }).data;
+                toast.error(typeof data === "string" ? data : "Couldn't save your garden");
+              }),
+            onSendGift: async (toUserId, kind, note) => {
+              await sendGift({ toUserId, kind, note: note.trim() || undefined });
+            },
+            onMarkGiftsRead: () => void markGiftsRead({}),
+            onRemoveGift: (id) => void removeGift({ id: id as Id<"gifts"> }),
+          }
+        : undefined,
+    [myId, mine, gifts, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift]
+  );
+
   // Everyone else who has planted this month, busiest gardens closest to yours.
   const others = useMemo<WorldGardenEntry[]>(
     () =>
@@ -72,6 +109,6 @@ export const HomeGarden = () => {
     [world, myId]
   );
 
-  if (isPending || (myId && myPosts === undefined) || world === undefined) return <HomeGardenSkeleton />;
-  return <WorldGardenScene me={me} others={others} onWater={water} />;
+  if (isPending || (myId && (myPosts === undefined || mine === undefined)) || world === undefined) return <HomeGardenSkeleton />;
+  return <WorldGardenScene me={me} others={others} onWater={water} garden={garden} />;
 };

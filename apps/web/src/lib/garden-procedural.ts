@@ -1006,6 +1006,8 @@ export type GardenLayout = {
   water: THREE.BufferGeometry | null;
   plots: GardenPlot[];
   bounds: THREE.Box3;
+  // Every cell of the island, for rearranging plants and placing decorations.
+  cells: Cell[];
 };
 
 export type Cell = { x: number; z: number; top: number; kind: "grass" | "path" | "water"; used: boolean };
@@ -1179,6 +1181,7 @@ export const buildIsland = (
     decor: keptDecor.length ? merge(keptDecor) : null,
     plots,
     bounds,
+    cells,
   };
 };
 

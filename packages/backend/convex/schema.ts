@@ -46,6 +46,31 @@ export default defineSchema({
     .index("by_entryDate", ["entryDate"])
     .index("by_year", ["year"])
     .searchIndex("search_body", { searchField: "body", filterFields: ["userId"] }),
+  // How someone has arranged their own garden: plants they've moved and the
+  // decorations they've placed, in cells relative to the island's centre.
+  gardenLayouts: defineTable({
+    userId: v.string(),
+    moves: v.array(v.object({ postId: v.id("posts"), x: v.number(), z: v.number() })),
+    decorations: v.array(
+      v.object({
+        id: v.string(),
+        kind: v.union(v.literal("stones"), v.literal("bench"), v.literal("lantern"), v.literal("birdbath"), v.literal("arch")),
+        x: v.number(),
+        z: v.number(),
+        turn: v.number(),
+      })
+    ),
+  }).index("by_userId", ["userId"]),
+  // Small gifts left in someone's garden. Notes are only ever shown to the recipient.
+  gifts: defineTable({
+    toUserId: v.string(),
+    fromUserId: v.string(),
+    kind: v.union(v.literal("pebble"), v.literal("fireflies"), v.literal("blossom")),
+    note: v.optional(v.string()),
+    read: v.boolean(),
+  })
+    .index("by_to", ["toUserId"])
+    .index("by_from_to", ["fromUserId", "toUserId"]),
   plantReactions: defineTable({
     postId: v.id("posts"),
     userId: v.string(),
