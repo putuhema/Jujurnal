@@ -45,6 +45,7 @@ export const HomeGarden = () => {
   const [timeZone] = useState(getBrowserTimeZone);
   const mine = useQuery(api.garden.getMine, myId ? { timeZone } : "skip");
   const gifts = useQuery(api.gifts.getMine, myId ? {} : "skip");
+  const giftedToday = useQuery(api.gifts.giftedRecently, myId ? {} : "skip");
   const saveArrangement = useMutation(api.garden.saveArrangement);
   const sendGift = useMutation(api.gifts.send);
   const markGiftsRead = useMutation(api.gifts.markAllRead);
@@ -90,14 +91,13 @@ export const HomeGarden = () => {
                 const data = (error as { data?: unknown }).data;
                 toast.error(typeof data === "string" ? data : "Couldn't save your garden");
               }),
-            onSendGift: async (toUserId, kind, note) => {
-              await sendGift({ toUserId, kind, note: note.trim() || undefined });
-            },
+            giftedToday: giftedToday ?? [],
+            onSendGift: async (toUserId, kind, note) => (await sendGift({ toUserId, kind, note: note.trim() || undefined })).status,
             onMarkGiftsRead: () => void markGiftsRead({}),
             onRemoveGift: (id) => void removeGift({ id: id as Id<"gifts"> }),
           }
         : undefined,
-    [myId, mine, gifts, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift]
+    [myId, mine, gifts, giftedToday, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift]
   );
 
   // Everyone else who has planted this month, busiest gardens closest to yours.

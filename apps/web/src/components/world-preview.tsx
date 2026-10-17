@@ -51,6 +51,7 @@ export const WorldPreview = () => {
 
   // A sample of your garden's extras, kept in memory: everything unlocked, two gifts.
   const [arrangement, setArrangement] = useState<Arrangement>({ moves: [], decorations: [] });
+  const [giftedToday, setGiftedToday] = useState<string[]>([]);
   const [gifts, setGifts] = useState<GiftView[]>(() => [
     { _id: "gift-1", _creationTime: Date.now() - 3_600_000, kind: "fireflies", note: "Your garden made my evening. Thank you for sharing it.", read: false, from: "Citra" },
     { _id: "gift-2", _creationTime: Date.now() - 86_400_000, kind: "pebble", read: true, from: "Bima" },
@@ -61,7 +62,12 @@ export const WorldPreview = () => {
     recentMoods: me.posts.slice(-7).reverse().map((post) => post.mood),
     gifts,
     onSaveArrangement: setArrangement,
-    onSendGift: async () => {},
+    giftedToday,
+    onSendGift: async (toUserId) => {
+      if (giftedToday.includes(toUserId)) return "already";
+      setGiftedToday((list) => [...list, toUserId]);
+      return "sent";
+    },
     onMarkGiftsRead: () => setGifts((list) => list.map((gift) => ({ ...gift, read: true }))),
     onRemoveGift: (id) => setGifts((list) => list.filter((gift) => gift._id !== id)),
   };

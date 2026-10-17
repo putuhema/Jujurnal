@@ -64,7 +64,9 @@ export type MyGarden = {
   recentMoods: MoodGrade[];
   gifts: GiftView[];
   onSaveArrangement: (arrangement: Arrangement) => void;
-  onSendGift: (toUserId: string, kind: GiftKind, note: string) => Promise<void>;
+  // Gardens you've already left a gift in today (one a day each).
+  giftedToday: string[];
+  onSendGift: (toUserId: string, kind: GiftKind, note: string) => Promise<"sent" | "already" | "unavailable" | "signedOut">;
   onMarkGiftsRead: () => void;
   onRemoveGift: (id: string) => void;
 };
@@ -1781,16 +1783,18 @@ export default function WorldGardenScene({
           name={visit.placement.garden.name}
           onClose={() => setPanel(null)}
           onSend={async (kind, note) => {
-            try {
-              await garden.onSendGift(visit.placement.garden.userId, kind, note);
+            const name = visit.placement.garden.name;
+            const result = await garden.onSendGift(visit.placement.garden.userId, kind, note).catch(() => "failed" as const);
+            if (result === "sent") {
               playGardenSound("gift");
               buzz([10, 30, 10]);
-              toast.success(`You left a gift for ${visit.placement.garden.name}`);
+              toast.success(`You left a gift for ${name}`);
               setPanel(null);
-            } catch (error) {
-              const data = (error as { data?: unknown }).data;
-              toast.error(typeof data === "string" ? data : "Couldn't leave the gift. Try again?");
-            }
+            } else if (result === "already") {
+              toast(`You've already left ${name} a gift today. Come back tomorrow!`);
+              setPanel(null);
+            } else if (result === "signedOut") toast("Log in to leave gifts.");
+            else toast.error("Couldn't leave the gift. Try again?");
           }}
         />
       ) : null}
@@ -1818,10 +1822,16 @@ export default function WorldGardenScene({
           <span />
         )}
         <div className="flex items-end gap-2">
-          {mode === "visit" && garden ? (
-            <PillButton primary onClick={() => setPanel("gift")}>
-              <GiftIcon className="size-4 shrink-0" aria-hidden="true" /> <span className="whitespace-nowrap">Leave a gift</span>
-            </PillButton>
+          {mode === "visit" && garden && visit ? (
+            garden.giftedToday.includes(visit.placement.garden.userId) ? (
+              <p className={cn("flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-medium whitespace-nowrap text-foreground/70", glassSurface)}>
+                <GiftIcon className="size-4 shrink-0" aria-hidden="true" /> Gift left today
+              </p>
+            ) : (
+              <PillButton primary onClick={() => setPanel("gift")}>
+                <GiftIcon className="size-4 shrink-0" aria-hidden="true" /> <span className="whitespace-nowrap">Leave a gift</span>
+              </PillButton>
+            )
           ) : null}
           <MoreMenu
             open={toolsOpen}
