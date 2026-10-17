@@ -14,7 +14,7 @@ const HomeGardenSkeleton = () => (
   <div
     role="status"
     aria-label="Growing your garden"
-    className="-mx-4 -mb-32 grid h-[calc(100svh-6rem)] w-[calc(100%+2rem)] place-items-center sm:mx-0 sm:mb-0 sm:h-[clamp(26rem,calc(100svh-9rem),56rem)] sm:w-full"
+    className="fixed inset-0 z-0 grid place-items-center"
   >
     <span
       aria-hidden="true"

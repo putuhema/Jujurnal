@@ -33,6 +33,47 @@ export const GardenLights = ({ shadowReach }: { shadowReach: number }) => (
 
 const easeOutCubic = (value: number) => 1 - (1 - value) ** 3;
 
+// Plants don't cast shadow-map shadows: thin petals swaying in a shadow map
+// always shimmer. Each sits on a soft contact shadow instead, nudged away from
+// the sun so it still reads as lit from one side.
+const blobGeometry = new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2);
+const blobMaterial = new THREE.ShaderMaterial({
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      float d = length(vUv - 0.5) * 2.0;
+      gl_FragColor = vec4(0.06, 0.1, 0.04, pow(max(0.0, 1.0 - d), 1.6) * 0.34);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+});
+const SHADOW_DIRECTION = new THREE.Vector2(0.4, -0.6).normalize();
+
+const ContactShadow = ({ model }: { model: PlantModel }) => {
+  const { radius, offset } = useMemo(() => {
+    const box = model.geometry.boundingBox ?? new THREE.Box3().setFromBufferAttribute(model.geometry.attributes.position as THREE.BufferAttribute);
+    const reach = Math.max(-box.min.x, box.max.x, -box.min.z, box.max.z);
+    return { radius: reach * 0.7 + 0.12, offset: model.height * 0.12 };
+  }, [model]);
+  return (
+    <mesh
+      geometry={blobGeometry}
+      material={blobMaterial}
+      position={[SHADOW_DIRECTION.x * offset, 0.008, SHADOW_DIRECTION.y * offset]}
+      scale={[radius * 1.25, 1, radius]}
+      renderOrder={1}
+    />
+  );
+};
+
 export const GardenPlant = ({
   model,
   plot,
@@ -104,8 +145,6 @@ export const GardenPlant = ({
     plant.visible = progress.current > 0;
     plant.scale.setScalar(growth * (0.88 + 0.12 * eased) * (1 + uniforms.uHover.value * 0.06));
     plant.rotation.z = model.lean + Math.sin(time * model.swaySpeed * 0.6 + model.swayPhase) * 0.015;
-    // The shadow pass doesn't know about the reveal, so only cast once fully grown.
-    if (meshRef.current) meshRef.current.castShadow = progress.current >= 1;
   });
 
   return (
@@ -117,9 +156,8 @@ export const GardenPlant = ({
         scale={animate ? 0 : growth * (isActive ? 1.06 : 1)}
         visible={!animate && shown}
       >
-        {/* Plants cast shadows but don't receive them: thin two-sided petals shadowing
-            themselves shimmer as they sway. */}
-        <mesh ref={meshRef} geometry={model.geometry} material={material} customDepthMaterial={depthMaterial} castShadow={!animate} />
+        <ContactShadow model={model} />
+        <mesh ref={meshRef} geometry={model.geometry} material={material} />
       </group>
     </group>
   );

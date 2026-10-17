@@ -15,8 +15,10 @@ export const giftInfo: Record<GiftKind, { label: string; phrase: string; icon: L
   blossom: { label: "Pressed blossoms", phrase: "some pressed blossoms", icon: Flower2 },
 };
 
+// The garden frame turns off text selection and touch gestures; panels with
+// text and inputs turn them back on (iOS won't focus a textarea otherwise).
 const panelClass =
-  "absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2100] max-h-[60%] overflow-y-auto overscroll-contain rounded-3xl p-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 sm:inset-x-auto sm:right-24 sm:bottom-6 sm:w-80";
+  "touch-auto select-text absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2100] max-h-[60%] overflow-y-auto overscroll-contain rounded-3xl p-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 sm:inset-x-auto sm:right-24 sm:bottom-6 sm:w-80";
 
 // Leave a gift, and maybe a short kind note, in the garden you're visiting.
 export const GiftComposer = ({ name, onSend, onClose }: { name: string; onSend: (kind: GiftKind, note: string) => Promise<void>; onClose: () => void }) => {

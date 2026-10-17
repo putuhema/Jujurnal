@@ -16,7 +16,7 @@ export function PeriodToggle({ value, onChange }: { value: PeriodView; onChange:
             aria-pressed={active}
             onClick={() => onChange(period)}
             className={cn(
-              "rounded-full px-3 py-1.5 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "rounded-full px-3 py-1.5 text-xs font-semibold transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
               active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >

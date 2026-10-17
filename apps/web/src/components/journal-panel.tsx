@@ -12,7 +12,9 @@ import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import type { WorldPost } from "./world-garden-scene";
 
-const SWIPE = { close: 70, page: 60 };
+// A long drag or a quick flick (px per ms) both count.
+const SWIPE = { close: 70, page: 60, flick: 0.45 };
+const DRAWER_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 
 // The journal you're reading, beside the plant the camera has zoomed in on.
 // A side panel on wide screens; on phones a bottom sheet you can swipe down to
@@ -42,13 +44,13 @@ export const JournalPanel = ({
   const fetched = useQuery(api.posts.getById, post.body === undefined ? { id: post._id as Id<"posts"> } : "skip");
   const body = post.body ?? fetched?.body;
   const date = getCalendarDate(post._creationTime, post.entryDate).date;
-  const swipe = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const swipe = useRef<{ pointerId: number; x: number; y: number; at: number } | null>(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
 
   // Swipes start on the sheet's header (the handle), so the text stays scrollable.
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" || (event.target as HTMLElement).closest("button")) return;
-    swipe.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    swipe.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, at: performance.now() };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
@@ -62,9 +64,12 @@ export const JournalPanel = ({
     const start = swipe.current;
     if (!start || start.pointerId !== event.pointerId) return;
     swipe.current = null;
-    if (drag.y > SWIPE.close) onClose();
-    else if (drag.x < -SWIPE.page && index < total - 1) onNext();
-    else if (drag.x > SWIPE.page && index > 0) onPrevious();
+    const elapsed = Math.max(1, performance.now() - start.at);
+    const flickY = drag.y / elapsed > SWIPE.flick && drag.y > 12;
+    const flickX = Math.abs(drag.x) / elapsed > SWIPE.flick && Math.abs(drag.x) > 12;
+    if (drag.y > SWIPE.close || flickY) onClose();
+    else if ((drag.x < -SWIPE.page || (flickX && drag.x < 0)) && index < total - 1) onNext();
+    else if ((drag.x > SWIPE.page || (flickX && drag.x > 0)) && index > 0) onPrevious();
     setDrag({ x: 0, y: 0 });
   };
 
@@ -72,8 +77,8 @@ export const JournalPanel = ({
     <section
       data-world-control
       aria-label="Journal"
-      className="absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2500] flex max-h-[52%] flex-col rounded-[1.75rem] border border-border/70 bg-card shadow-[0_12px_40px_oklch(0.2_0.03_70/22%)] motion-safe:animate-in motion-safe:slide-in-from-bottom-10 motion-safe:fade-in-0 sm:inset-x-auto sm:top-4 sm:right-4 sm:bottom-4 sm:max-h-none sm:w-[22rem] sm:rounded-3xl sm:shadow-xl sm:motion-safe:slide-in-from-bottom-0 sm:motion-safe:slide-in-from-right-8"
-      style={drag.x || drag.y ? { transform: `translate(${drag.x * 0.35}px, ${drag.y}px)`, transition: "none" } : { transition: "transform 200ms ease-out" }}
+      className="absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2500] flex max-h-[52%] flex-col rounded-[1.75rem] border border-border/70 bg-card shadow-[0_12px_40px_oklch(0.2_0.03_70/22%)] motion-safe:animate-in motion-safe:slide-in-from-bottom-[60%] motion-safe:fade-in-0 motion-safe:duration-[380ms] motion-safe:ease-[cubic-bezier(0.32,0.72,0,1)] sm:inset-x-auto sm:top-24 sm:right-4 sm:bottom-4 sm:max-h-none sm:w-[22rem] sm:rounded-3xl sm:shadow-xl sm:motion-safe:slide-in-from-bottom-0 sm:motion-safe:slide-in-from-right-8"
+      style={drag.x || drag.y ? { transform: `translate(${drag.x * 0.35}px, ${drag.y}px)`, transition: "none" } : { transition: `transform 320ms ${DRAWER_EASE}` }}
     >
       <header
         className="touch-none border-b border-border/60 px-5 pt-2 pb-4 sm:touch-auto sm:p-5"

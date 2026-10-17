@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
@@ -175,8 +175,9 @@ export const GardenFlower = ({
     className: "absolute -translate-x-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
     style,
     title: showTitle ? getPlantTitle(isPrivate, isNewest, mood) : undefined,
-    onPointerEnter: () => onActiveChange?.(true),
-    onPointerLeave: () => onActiveChange?.(false),
+    // Only a mouse hovers; on touch, pointerenter fires on tap and the lift would stick.
+    onPointerEnter: (event: ReactPointerEvent) => event.pointerType === "mouse" && onActiveChange?.(true),
+    onPointerLeave: (event: ReactPointerEvent) => event.pointerType === "mouse" && onActiveChange?.(false),
     onFocus: () => onActiveChange?.(true),
     onBlur: () => onActiveChange?.(false),
     onClick: () => playGardenSound("click"),

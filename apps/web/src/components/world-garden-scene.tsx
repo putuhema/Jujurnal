@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   useEffect,
   useMemo,
@@ -13,7 +12,7 @@ import {
   type RefObject,
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Gift as GiftIcon, Globe, History, Inbox, Map as MapIcon, Minus, Pause, Play, Plus, RotateCcw, RotateCw, Shovel, SlidersHorizontal, Sprout, Share2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Gift as GiftIcon, History, Inbox, Map as MapIcon, Pause, Play, Shovel, Sprout, Share2, Volume2, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { getCalendarDate } from "@/lib/calendar-date";
@@ -30,6 +29,7 @@ import { GardenEditor, type EditorHeld } from "./garden-editor";
 import { BloomBurst, NewBeam } from "./garden-highlights";
 import { moodLabels } from "./garden-flower";
 import { GiftComposer, GiftInbox, type GiftView } from "./garden-gifts";
+import { ModeSwitch, MoreMenu, PillButton } from "./garden-controls";
 import {
   applyWorldView,
   createPieceLayout,
@@ -1015,11 +1015,12 @@ export default function WorldGardenScene({
   // Your own garden view shows just your piece; the world appears when you explore.
   const visible = useMemo(() => {
     if (mode === "garden" && mine) return [mine];
+    if (mode === "visit" && visit && !visit.leaving) return [];
     const centerX = focus.gx * PIECE_SIZE;
     const centerZ = focus.gz * PIECE_SIZE;
     const limit = focus.reach + PIECE_SIZE * 1.5;
     return placements.filter((placement) => Math.hypot(placement.center.x - centerX, placement.center.z - centerZ) <= limit);
-  }, [placements, focus, mode, mine]);
+  }, [placements, focus, mode, mine, visit]);
   useEffect(() => {
     cache.retain(new Set(visible.filter((placement) => !placement.isMine).map((placement) => placement.key)));
   }, [cache, visible]);
@@ -1186,6 +1187,8 @@ export default function WorldGardenScene({
     const frame = frameRef.current;
     if (!frame) return;
     const handleWheel = (event: WheelEvent) => {
+      // Panels (journal, gifts) scroll normally.
+      if ((event.target as HTMLElement).closest("[data-world-control]")) return;
       event.preventDefault();
       zoomByRef.current(Math.exp(event.deltaY * 0.0012));
     };
@@ -1303,6 +1306,23 @@ export default function WorldGardenScene({
   };
   const heldDecoration = held?.type === "decoration" ? arrangement.decorations.find((item) => item.id === held.id) : undefined;
 
+  // --- A one-time hint for the gestures (drag to turn, pinch to zoom, tap to read) ---
+  const [hintSeen, setHintSeen] = useState(() => typeof window === "undefined" || window.localStorage.getItem("bloom-hint-seen") === "1");
+  const dismissHint = () => {
+    if (hintSeen) return;
+    setHintSeen(true);
+    window.localStorage.setItem("bloom-hint-seen", "1");
+  };
+  useEffect(() => {
+    if (isDragging || focusPostId) dismissHint();
+  });
+  useEffect(() => {
+    if (hintSeen || mode !== "garden") return;
+    const timer = window.setTimeout(dismissHint, 8000);
+    return () => window.clearTimeout(timer);
+  });
+  const showHint = !hintSeen && mode === "garden" && Boolean(me) && myPosts.length > 0 && !planting && !editing && !isReading && !replay;
+
   // --- Postcard ---
   const [sharing, setSharing] = useState(false);
   const shareGarden = async () => {
@@ -1345,7 +1365,7 @@ export default function WorldGardenScene({
           ? "Garden world. Arrow keys pan, Q and E rotate, plus and minus zoom, Escape returns to your garden."
           : "Your garden. Left and right arrows or Q and E rotate."
       }
-      className={`relative isolate -mx-4 -mb-32 h-[calc(100svh-6rem)] w-[calc(100%+2rem)] touch-none overflow-hidden select-none outline-none focus-visible:ring-2 focus-visible:ring-ring sm:mx-0 sm:mb-0 sm:h-[clamp(26rem,calc(100svh-9rem),56rem)] sm:w-full sm:rounded-3xl ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
+      className={`fixed inset-0 isolate z-0 h-[100lvh] w-full touch-none overflow-hidden select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endPointer}
@@ -1589,8 +1609,8 @@ export default function WorldGardenScene({
                 aria-label={isPrivate ? "Open private journal" : getJournalAriaLabel(mode === "garden" && post._id === newestPostId, post.mood)}
                 aria-pressed={focusPostId === post._id}
                 className="absolute -translate-x-1/2 cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onPointerEnter={() => setActivePostId(post._id)}
-                onPointerLeave={() => setActivePostId((active) => (active === post._id ? null : active))}
+                onPointerEnter={(event) => event.pointerType === "mouse" && setActivePostId(post._id)}
+                onPointerLeave={(event) => event.pointerType === "mouse" && setActivePostId((active) => (active === post._id ? null : active))}
                 onFocus={() => setActivePostId(post._id)}
                 onBlur={() => setActivePostId((active) => (active === post._id ? null : active))}
                 onClick={() => {
@@ -1627,36 +1647,62 @@ export default function WorldGardenScene({
       ) : null}
 
       {selected && mode === "world" ? (
-        <div data-world-control className="absolute left-3 right-[4.5rem] bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] rounded-2xl border border-border/70 bg-card/95 p-4 shadow-lg backdrop-blur-sm sm:right-auto sm:bottom-6 sm:left-4 sm:w-64">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-display text-lg leading-tight">{selected.garden.name}'s garden</p>
-              <p className="text-xs text-muted-foreground">
-                {selected.garden.posts.length} {selected.garden.posts.length === 1 ? "flower" : "flowers"} this month
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSelected(null)}
-              aria-label="Close"
-              className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-            >
-              <X className="size-4" aria-hidden="true" />
-            </button>
+        <div
+          data-world-control
+          className={cn(
+            "absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+9.5rem)] z-[2000] flex items-center gap-2 rounded-full py-1.5 pr-1.5 pl-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 sm:right-auto sm:bottom-24 sm:left-6 sm:w-80",
+            glassSurface,
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{selected.garden.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {selected.garden.posts.length} {selected.garden.posts.length === 1 ? "flower" : "flowers"} this month
+            </p>
           </div>
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => startVisit(selected)}
-              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground"
-            >
-              <MapIcon className="size-3.5" aria-hidden="true" /> Visit
-            </button>
-            <Link href={`/profile/plants/${selected.garden.userId}`} className="text-sm font-medium text-primary hover:underline">
-              Full garden →
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => startVisit(selected)}
+            className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium whitespace-nowrap text-primary-foreground transition-transform duration-150 ease-out active:scale-[0.97]"
+          >
+            <MapIcon className="size-4" aria-hidden="true" /> Visit
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelected(null)}
+            aria-label="Close"
+            className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-transform duration-150 ease-out hover:bg-foreground/5 active:scale-[0.97]"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
         </div>
+      ) : null}
+
+      {mode === "visit" && visit && !visit.leaving && !isReading ? (
+        <div
+          key={visit.placement.slot}
+          className="pointer-events-none absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] left-1/2 z-[2000] max-w-[calc(100%-2rem)] -translate-x-1/2 text-center motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2 motion-safe:duration-300"
+        >
+          <p className={cn("truncate rounded-full px-5 py-2", glassSurface)}>
+            <span className="font-display text-lg">{visit.placement.garden.name}'s garden</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {visit.placement.garden.posts.length} {visit.placement.garden.posts.length === 1 ? "flower" : "flowers"}
+            </span>
+          </p>
+        </div>
+      ) : null}
+
+      {showHint ? (
+        <p
+          role="status"
+          className={cn(
+            "pointer-events-none absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] left-1/2 z-[2000] -translate-x-1/2 rounded-full px-4 py-2 text-xs font-medium whitespace-nowrap text-foreground/80",
+            "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2 motion-safe:duration-300 [animation-delay:800ms] [animation-fill-mode:both]",
+            glassSurface,
+          )}
+        >
+          {coarsePointer ? "Drag to turn · Pinch to zoom · Tap a flower to read" : "Drag to turn · Scroll to zoom · Click a flower to read"}
+        </p>
       ) : null}
 
       {planting && plantingPost ? (
@@ -1664,7 +1710,7 @@ export default function WorldGardenScene({
           key={planting.key}
           role="status"
           className={cn(
-            "pointer-events-none absolute top-4 left-1/2 z-[2000] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap",
+            "pointer-events-none absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] left-1/2 z-[2000] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium whitespace-nowrap",
             "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-3 motion-safe:duration-500 [animation-delay:1.2s] [animation-fill-mode:both]",
             glassSurface,
           )}
@@ -1678,7 +1724,7 @@ export default function WorldGardenScene({
         <div
           data-world-control
           className={cn(
-            "absolute left-3 right-[4.5rem] bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] flex items-center gap-3 rounded-full py-1 pr-4 pl-1 sm:right-auto sm:bottom-6 sm:left-1/2 sm:w-[min(28rem,calc(100%-10rem))] sm:-translate-x-1/2",
+            "absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+9.5rem)] z-[2000] flex items-center gap-3 rounded-full py-1 pr-4 pl-1 sm:right-auto sm:bottom-24 sm:left-1/2 sm:w-[min(28rem,calc(100%-10rem))] sm:-translate-x-1/2",
             glassSurface,
             isReading && "hidden sm:flex",
           )}
@@ -1753,128 +1799,62 @@ export default function WorldGardenScene({
         <GiftInbox gifts={garden.gifts} onRemove={garden.onRemoveGift} onClose={() => setPanel(null)} />
       ) : null}
 
-      {/* Tools tuck behind one button in the bottom-right corner, above the bottom navigation. */}
+      {/* Controls: Garden | World on the left, what you'd do next on the right. */}
       <div
         data-world-control
         className={cn(
-          "absolute right-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] flex flex-col items-center gap-2 sm:right-6 sm:bottom-6",
+          "absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2000] flex items-end justify-between gap-2 sm:inset-x-6 sm:bottom-6",
           isReading && "hidden sm:flex sm:right-[24rem]",
           (editing || panel) && "hidden",
         )}
       >
-        {toolsOpen ? (
-          <div
-            id="garden-tools"
-            className={cn(
-              "flex origin-bottom flex-col items-center gap-0.5 rounded-full p-1 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:slide-in-from-bottom-2",
-              glassSurface,
-            )}
-          >
-            {mode === "visit" ? (
-              <PrimaryButton label="Back to the world" onClick={() => goTo("world")}>
-                <Globe className="size-[18px]" aria-hidden="true" />
-              </PrimaryButton>
-            ) : me ? (
-              <PrimaryButton label={mode === "garden" ? "Explore the world" : "Back to my garden"} onClick={() => goTo(mode === "garden" ? "world" : "garden")}>
-                {mode === "garden" ? <Globe className="size-[18px]" aria-hidden="true" /> : <Sprout className="size-[18px]" aria-hidden="true" />}
-              </PrimaryButton>
-            ) : null}
-            {mode === "visit" || me ? <span aria-hidden="true" className="my-1 h-px w-5 bg-border" /> : null}
-            <ControlButton label="Rotate left (Q)" onClick={() => turnBy(-BUTTON_TURN)}>
-              <RotateCcw className="size-4" aria-hidden="true" />
-            </ControlButton>
-            <ControlButton label="Rotate right (E)" onClick={() => turnBy(BUTTON_TURN)}>
-              <RotateCw className="size-4" aria-hidden="true" />
-            </ControlButton>
-            {mode === "garden" && myPosts.length > 0 && !replay ? (
-              <ControlButton label="Replay your month" onClick={() => setReplay({ day: 0, playing: true })}>
-                <History className="size-4" aria-hidden="true" />
-              </ControlButton>
-            ) : null}
-            {mode === "garden" && me ? (
-              <>
-                <ControlButton label="Arrange your garden" onClick={startEditing}>
-                  <Shovel className="size-4" aria-hidden="true" />
-                </ControlButton>
-                {garden ? (
-                  <ControlButton
-                    label={unreadGifts ? `Gifts (${unreadGifts} new)` : "Gifts"}
-                    onClick={() => {
-                      setToolsOpen(false);
-                      setPanel("inbox");
-                      if (unreadGifts) garden.onMarkGiftsRead();
-                    }}
-                  >
-                    <span className="relative">
-                      <Inbox className="size-4" aria-hidden="true" />
-                      {unreadGifts ? <span className="absolute -top-1.5 -right-1.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-card" /> : null}
-                    </span>
-                  </ControlButton>
-                ) : null}
-                <ControlButton label="Share a postcard" disabled={sharing} onClick={() => void shareGarden()}>
-                  <Share2 className="size-4" aria-hidden="true" />
-                </ControlButton>
-              </>
-            ) : null}
-            {mode === "visit" && garden ? (
-              <ControlButton
-                label="Leave a gift"
-                onClick={() => {
-                  setToolsOpen(false);
-                  setPanel("gift");
-                }}
-              >
-                <GiftIcon className="size-4" aria-hidden="true" />
-              </ControlButton>
-            ) : null}
-            <ControlButton label={soundOn ? "Turn garden sounds off" : "Turn garden sounds on"} onClick={toggleSound}>
-              {soundOn ? <Volume2 className="size-4" aria-hidden="true" /> : <VolumeX className="size-4" aria-hidden="true" />}
-            </ControlButton>
-            {mode === "world" ? (
-              <>
-                <ControlButton label="Zoom in (+)" disabled={worldZoom <= WORLD_ZOOM.min} onClick={() => zoomWorld(1 / WORLD_ZOOM.step)}>
-                  <Plus className="size-4" aria-hidden="true" />
-                </ControlButton>
-                <ControlButton label="Zoom out (−)" disabled={worldWidth >= maxWorldWidth} onClick={() => zoomWorld(WORLD_ZOOM.step)}>
-                  <Minus className="size-4" aria-hidden="true" />
-                </ControlButton>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setToolsOpen((open) => !open)}
-          aria-label={toolsOpen ? "Close tools" : "Open tools"}
-          aria-expanded={toolsOpen}
-          aria-controls="garden-tools"
-          title={toolsOpen ? "Close tools" : "Tools"}
-          className={cn(
-            "relative flex size-12 cursor-pointer items-center justify-center rounded-full text-foreground/80 transition-transform active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            glassSurface,
-          )}
-        >
-          {toolsOpen ? <X className="size-5" aria-hidden="true" /> : <SlidersHorizontal className="size-5" aria-hidden="true" />}
-          {!toolsOpen && unreadGifts > 0 && mode === "garden" ? (
-            <span className="absolute top-1 right-1 size-3 rounded-full bg-rose-500 ring-2 ring-card" aria-label={`${unreadGifts} new gifts`} />
+        {mode === "visit" && visit ? (
+          <PillButton onClick={() => goTo("world")} label="Back to the world">
+            <ArrowLeft className="size-4" aria-hidden="true" /> World
+          </PillButton>
+        ) : me ? (
+          <ModeSwitch mode={mode === "world" ? "world" : "garden"} onChange={(next) => next !== mode && goTo(next)} />
+        ) : (
+          <span />
+        )}
+        <div className="flex items-end gap-2">
+          {mode === "visit" && garden ? (
+            <PillButton primary onClick={() => setPanel("gift")}>
+              <GiftIcon className="size-4 shrink-0" aria-hidden="true" /> <span className="whitespace-nowrap">Leave a gift</span>
+            </PillButton>
           ) : null}
-        </button>
+          <MoreMenu
+            open={toolsOpen}
+            onOpenChange={setToolsOpen}
+            badge={mode === "garden" && unreadGifts > 0}
+            turn={{ left: () => turnBy(-BUTTON_TURN), right: () => turnBy(BUTTON_TURN) }}
+            zoom={
+              mode === "world"
+                ? { in: () => zoomWorld(1 / WORLD_ZOOM.step), out: () => zoomWorld(WORLD_ZOOM.step), canIn: worldZoom > WORLD_ZOOM.min, canOut: worldWidth < maxWorldWidth }
+                : undefined
+            }
+            items={[
+              ...(mode === "garden" && me
+                ? [
+                    { label: "Arrange garden", icon: Shovel, onClick: startEditing },
+                    ...(garden
+                      ? [{ label: "Gifts", icon: Inbox, badge: unreadGifts, onClick: () => {
+                          setPanel("inbox");
+                          if (unreadGifts) garden.onMarkGiftsRead();
+                        } }]
+                      : []),
+                    { label: "Share a postcard", icon: Share2, disabled: sharing, onClick: () => void shareGarden() },
+                    ...(myPosts.length > 0 && !replay ? [{ label: "Replay this month", icon: History, onClick: () => setReplay({ day: 0, playing: true }) }] : []),
+                  ]
+                : []),
+              { label: soundOn ? "Sounds on" : "Sounds off", icon: soundOn ? Volume2 : VolumeX, onClick: toggleSound, keepOpen: true },
+            ]}
+          />
+        </div>
       </div>
     </div>
   );
 }
-
-const PrimaryButton = ({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-label={label}
-    title={label}
-    className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-  >
-    {children}
-  </button>
-);
 
 const ControlButton = ({
   label,
@@ -1893,7 +1873,7 @@ const ControlButton = ({
     disabled={disabled}
     aria-label={label}
     title={label}
-    className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground/80 hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-40"
+    className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-foreground/80 transition-transform duration-150 ease-out hover:bg-muted active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-40"
   >
     {children}
   </button>

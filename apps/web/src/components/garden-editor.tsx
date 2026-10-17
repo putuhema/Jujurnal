@@ -1,6 +1,7 @@
 "use client";
 
-import { Armchair, Check, Footprints, Lamp, Lock, RotateCw, Trash2, Bird, Flower, type LucideIcon } from "lucide-react";
+import { Armchair, Bird, Check, Flower, Footprints, Lamp, Lock, RotateCw, Trash2, type LucideIcon } from "lucide-react";
+import { toast } from "sonner";
 import { decorationKinds, decorationUnlocks, type DecorationKind } from "@puma-brain/backend/convex/gardenItems";
 import { cn, glassSurface } from "@/lib/utils";
 
@@ -18,15 +19,47 @@ export type EditorHeld =
   | { type: "decoration"; id: string }
   | null;
 
-// What you're doing right now, in a sentence.
+// One short line about what a tap will do next.
 const hint = (held: EditorHeld) =>
   !held
-    ? "Tap a flower or decoration to pick it up, or choose something to place."
+    ? "Tap a flower to move it, or pick something to place"
     : held.type === "plant"
-      ? "Tap an empty spot to move this flower there."
+      ? "Now tap an empty spot"
       : held.type === "new"
-        ? `Tap an empty spot to place the ${decorationInfo[held.kind].label.toLowerCase()}.`
-        : "Tap an empty spot to move it, or turn or remove it.";
+        ? `Tap an empty spot for the ${decorationInfo[held.kind].label.toLowerCase()}`
+        : "Tap an empty spot to move it";
+
+const press = "transition-transform duration-150 ease-out active:scale-[0.95]";
+
+const RoundButton = ({
+  label,
+  onClick,
+  active,
+  dim,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  dim?: boolean;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    aria-pressed={active}
+    title={label}
+    className={cn(
+      "relative flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+      press,
+      active ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-foreground/5",
+      dim && "text-foreground/35",
+    )}
+  >
+    {children}
+  </button>
+);
 
 export const GardenEditor = ({
   held,
@@ -43,59 +76,64 @@ export const GardenEditor = ({
   onRemove: () => void;
   onDone: () => void;
 }) => (
-  <section
-    data-world-control
-    aria-label="Arrange your garden"
-    className={cn(
-      "absolute inset-x-3 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] z-[2100] rounded-3xl p-3 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-4 sm:inset-x-auto sm:bottom-6 sm:left-1/2 sm:w-[30rem] sm:-translate-x-1/2",
-      glassSurface,
-    )}
-  >
-    <div className="mb-2 flex items-center justify-between gap-3 px-1">
-      <p className="text-xs text-muted-foreground" aria-live="polite">{hint(held)}</p>
-      <button type="button" onClick={onDone} className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-primary px-3.5 text-sm font-medium text-primary-foreground">
-        <Check className="size-4" aria-hidden="true" /> Done
-      </button>
-    </div>
-    {held?.type === "decoration" ? (
-      <div className="flex gap-2">
-        <button type="button" onClick={onTurn} className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-background/70 text-sm font-medium hover:bg-muted">
-          <RotateCw className="size-4" aria-hidden="true" /> Turn
-        </button>
-        <button type="button" onClick={onRemove} className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-2xl bg-background/70 text-sm font-medium text-destructive hover:bg-muted">
-          <Trash2 className="size-4" aria-hidden="true" /> Remove
-        </button>
-      </div>
-    ) : (
-      <div role="listbox" aria-label="Decorations" className="flex gap-2 overflow-x-auto pb-0.5">
-        {decorationKinds.map((kind) => {
+  <>
+    <p
+      role="status"
+      className={cn(
+        "pointer-events-none absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] left-1/2 z-[2100] -translate-x-1/2 rounded-full px-4 py-2 text-xs font-medium whitespace-nowrap text-foreground/80",
+        glassSurface,
+      )}
+    >
+      {hint(held)}
+    </p>
+    <section
+      data-world-control
+      aria-label="Arrange your garden"
+      className={cn(
+        "absolute bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+5.75rem)] left-1/2 z-[2100] flex -translate-x-1/2 items-center gap-1 rounded-full p-1.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200 sm:bottom-6",
+        glassSurface,
+      )}
+    >
+      {held?.type === "decoration" ? (
+        <>
+          <RoundButton label="Turn" onClick={onTurn}>
+            <RotateCw className="size-5" aria-hidden="true" />
+          </RoundButton>
+          <RoundButton label="Remove" onClick={onRemove}>
+            <Trash2 className="size-5 text-destructive" aria-hidden="true" />
+          </RoundButton>
+        </>
+      ) : (
+        decorationKinds.map((kind) => {
           const { label, icon: Icon } = decorationInfo[kind];
           const needed = decorationUnlocks[kind];
           const locked = longestStreak < needed;
-          const active = held?.type === "new" && held.kind === kind;
           return (
-            <button
+            <RoundButton
               key={kind}
-              type="button"
-              role="option"
-              aria-selected={active}
-              aria-disabled={locked}
-              disabled={locked}
-              onClick={() => onPick(kind)}
-              title={locked ? `Unlocks with a ${needed}-day streak` : label}
-              className={cn(
-                "flex min-w-20 shrink-0 cursor-pointer flex-col items-center gap-1 rounded-2xl border px-2 py-2 text-[11px] font-medium leading-tight transition-colors disabled:cursor-not-allowed",
-                active ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background/60 hover:bg-muted",
-                locked && "opacity-55",
-              )}
+              label={locked ? `${label} (unlocks with a ${needed}-day streak)` : label}
+              active={held?.type === "new" && held.kind === kind}
+              dim={locked}
+              onClick={() => (locked ? toast(`${label} unlocks with a ${needed}-day streak`) : onPick(kind))}
             >
-              {locked ? <Lock className="size-5" aria-hidden="true" /> : <Icon className="size-5" aria-hidden="true" />}
-              <span>{label}</span>
-              {locked ? <span className="text-[10px] text-muted-foreground">{needed}-day streak</span> : null}
-            </button>
+              <Icon className="size-5" aria-hidden="true" />
+              {locked ? (
+                <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full bg-card text-foreground/60 shadow-sm">
+                  <Lock className="size-2.5" aria-hidden="true" />
+                </span>
+              ) : null}
+            </RoundButton>
           );
-        })}
-      </div>
-    )}
-  </section>
+        })
+      )}
+      <span aria-hidden="true" className="mx-1 h-6 w-px bg-border" />
+      <button
+        type="button"
+        onClick={onDone}
+        className={cn("flex h-11 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground", press)}
+      >
+        <Check className="size-4" aria-hidden="true" /> Done
+      </button>
+    </section>
+  </>
 );
