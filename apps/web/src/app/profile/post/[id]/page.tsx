@@ -19,6 +19,7 @@ import {
   PencilSimpleIcon,
   GlobeHemisphereWestIcon,
   LockKeyIcon,
+  EyeIcon,
 } from "@phosphor-icons/react";
 import {
   DropdownMenu,
@@ -214,10 +215,15 @@ export default function UserPost() {
               <div className="space-y-2">
                 <p>{post.body}</p>
 
-                <p className="text-xs text-muted-foreground">
+                <p className="flex items-center gap-3 text-xs text-muted-foreground">
                   {formatDistanceToNow(new Date(post._creationTime), {
                     addSuffix: true,
                   })}
+                  {post.readCount ? (
+                    <span className="inline-flex items-center gap-1">
+                      <EyeIcon className="size-3.5" aria-hidden="true" /> Read by {post.readCount}
+                    </span>
+                  ) : null}
                 </p>
               </div>
             </ItemContent>

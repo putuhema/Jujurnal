@@ -259,7 +259,13 @@ export const getUserPage = query({
       page: await Promise.all(
         page.page
           .filter((post) => isOwner || post.visibility !== "private")
-          .map(async (post) => ({ ...post, user, reactionCount: await countReactions(ctx, post) }))
+          .map(async (post) => ({
+            ...post,
+            user,
+            reactionCount: await countReactions(ctx, post),
+            // Only you see how many people read your journals.
+            readCount: isOwner ? (await ctx.db.query("postReads").withIndex("by_postId", (q) => q.eq("postId", post._id)).collect()).length : undefined,
+          }))
       ),
     };
   },

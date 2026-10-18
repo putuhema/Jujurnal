@@ -42,6 +42,7 @@ export const HomeGarden = () => {
   });
   const myPosts = useQuery(api.posts.getUserMonth, myId ? { userId: myId, month } : "skip");
   const world = useQuery(api.posts.getWorld, { month });
+  const fresh = useQuery(api.reads.freshUnread);
   const [timeZone] = useState(getBrowserTimeZone);
   const mine = useQuery(api.garden.getMine, myId ? { timeZone } : "skip");
   const gifts = useQuery(api.gifts.getMine, myId ? {} : "skip");
@@ -110,5 +111,5 @@ export const HomeGarden = () => {
   );
 
   if (isPending || (myId && (myPosts === undefined || mine === undefined)) || world === undefined) return <HomeGardenSkeleton />;
-  return <WorldGardenScene me={me} others={others} onWater={water} garden={garden} />;
+  return <WorldGardenScene me={me} others={others} onWater={water} garden={garden} fresh={fresh} />;
 };

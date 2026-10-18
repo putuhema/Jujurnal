@@ -20,6 +20,7 @@ import type * as mood from "../mood.js";
 import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
 import type * as reactions from "../reactions.js";
+import type * as reads from "../reads.js";
 import type * as reminderDelivery from "../reminderDelivery.js";
 import type * as reminderSchedule from "../reminderSchedule.js";
 import type * as reminders from "../reminders.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   posts: typeof posts;
   preferences: typeof preferences;
   reactions: typeof reactions;
+  reads: typeof reads;
   reminderDelivery: typeof reminderDelivery;
   reminderSchedule: typeof reminderSchedule;
   reminders: typeof reminders;

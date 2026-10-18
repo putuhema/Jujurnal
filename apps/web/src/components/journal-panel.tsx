@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronLeft, ChevronRight, LockKeyhole, X } from "lucide-react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ChevronLeft, ChevronRight, Eye, LockKeyhole, X } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 import { getCalendarDate } from "@/lib/calendar-date";
@@ -25,6 +25,7 @@ export const JournalPanel = ({
   total,
   owner,
   canWater,
+  live = true,
   onPrevious,
   onNext,
   onClose,
@@ -36,6 +37,8 @@ export const JournalPanel = ({
   // Shown when reading someone else's garden.
   owner?: string;
   canWater: boolean;
+  // Sample gardens don't talk to the server.
+  live?: boolean;
   onPrevious: () => void;
   onNext: () => void;
   onClose: () => void;
@@ -46,6 +49,16 @@ export const JournalPanel = ({
   const date = getCalendarDate(post._creationTime, post.entryDate).date;
   const swipe = useRef<{ pointerId: number; x: number; y: number; at: number } | null>(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
+  const markRead = useMutation(api.reads.markRead);
+  // Only you see how many people read your journals.
+  const readCount = useQuery(api.reads.readCount, live && !owner && !isPrivate ? { postId: post._id as Id<"posts"> } : "skip");
+
+  // Someone else's journal counts as read once it's been open for a moment.
+  useEffect(() => {
+    if (!live || !owner || isPrivate) return;
+    const timer = window.setTimeout(() => void markRead({ postId: post._id as Id<"posts"> }).catch(() => {}), 2500);
+    return () => window.clearTimeout(timer);
+  }, [live, owner, isPrivate, post._id, markRead]);
 
   // Swipes start on the sheet's header (the handle), so the text stays scrollable.
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
@@ -98,6 +111,11 @@ export const JournalPanel = ({
               {isPrivate ? (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <LockKeyhole className="size-3" aria-hidden="true" /> Private
+                </span>
+              ) : null}
+              {typeof readCount === "number" && readCount > 0 ? (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Eye className="size-3" aria-hidden="true" /> Read by {readCount} {readCount === 1 ? "gardener" : "gardeners"}
                 </span>
               ) : null}
             </div>

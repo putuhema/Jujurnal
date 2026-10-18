@@ -12,7 +12,7 @@ import {
   type RefObject,
 } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { ArrowLeft, Gift as GiftIcon, History, Inbox, Map as MapIcon, Pause, Play, Shovel, Sprout, Share2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, Gift as GiftIcon, History, Sparkles, Inbox, Map as MapIcon, Pause, Play, Shovel, Sprout, Share2, Volume2, VolumeX, X } from "lucide-react";
 import { toast } from "sonner";
 import * as THREE from "three";
 import { getCalendarDate } from "@/lib/calendar-date";
@@ -282,6 +282,7 @@ const OtherPiece = ({
   cache,
   gray,
   now,
+  beamPostId,
   onTap,
   onVisit,
 }: {
@@ -289,6 +290,8 @@ const OtherPiece = ({
   cache: PieceCache;
   gray: boolean;
   now: number;
+  // A fresh journal here you haven't read yet; it gets a beam of light.
+  beamPostId?: string;
   onTap: (placement: Placement, layout: GardenLayout, point: THREE.Vector3) => void;
   onVisit: (placement: Placement) => void;
 }) => {
@@ -303,6 +306,8 @@ const OtherPiece = ({
   useEffect(() => (displayKey ? cache.pin(displayKey) : undefined), [cache, displayKey]);
   if (!display?.layout) return null;
   const layout = display.layout;
+  const beamIndex = beamPostId ? sortByTime(placement.garden.posts).findIndex((post) => post._id === beamPostId) : -1;
+  const beamPlot = beamIndex >= 0 ? layout.plots[beamIndex] : undefined;
 
   return (
     <group
@@ -321,6 +326,7 @@ const OtherPiece = ({
       {layout.water ? <mesh geometry={layout.water} material={gray ? worldMaterials.waterGray : worldMaterials.water} /> : null}
       {/* Neighbouring plants skip the shadow pass: it would double their (largest) share of the frame. */}
       {display.plants ? <mesh geometry={display.plants} material={gray ? worldMaterials.plantsGray : worldMaterials.plants} /> : null}
+      {beamPlot ? <NewBeam position={beamPlot} /> : null}
     </group>
   );
 };
@@ -338,8 +344,10 @@ const VisitedPiece = ({
   activePostId,
   focusPostId,
   dim,
+  beamPostId,
   onGone,
 }: {
+  beamPostId?: string;
   layout: GardenLayout;
   posts: WorldPost[];
   models: PlantModel[];
@@ -399,6 +407,9 @@ const VisitedPiece = ({
           />
         );
       })}
+      {!leaving && beamPostId && beamPostId !== focusPostId && layout.plots[posts.findIndex((post) => post._id === beamPostId)] ? (
+        <NewBeam position={layout.plots[posts.findIndex((post) => post._id === beamPostId)]} />
+      ) : null}
     </group>
   );
 };
@@ -701,11 +712,14 @@ export default function WorldGardenScene({
   others,
   onWater,
   garden,
+  fresh = [],
   demo = false,
 }: {
   me: WorldGardenEntry | null;
   others: WorldGardenEntry[];
   garden?: MyGarden;
+  // Other people's journals from the last day that you haven't read, newest first.
+  fresh?: { postId: string; userId: string }[];
   // Sample data: skip anything that would ask the server about these posts.
   demo?: boolean;
   // Waters someone else's journal; the scene plays the animation on success.
@@ -1039,6 +1053,29 @@ export default function WorldGardenScene({
   const turnBy = (delta: number) => {
     goal.current.angle += delta;
     invalidate.current?.();
+  };
+
+  // Fresh journals waiting for a reader: the newest unread one in each garden glows.
+  const freshByGarden = useMemo(() => {
+    const byGarden = new Map<string, string>();
+    for (const { postId, userId } of fresh) if (!byGarden.has(userId)) byGarden.set(userId, postId);
+    return byGarden;
+  }, [fresh]);
+  const freshTargets = useMemo(
+    () =>
+      fresh.flatMap(({ postId, userId }) => {
+        const placement = placements.find((item) => item.garden.userId === userId && !item.isMine);
+        return placement && placement.garden.posts.some((post) => post._id === postId) ? [{ postId, placement }] : [];
+      }),
+    [fresh, placements]
+  );
+  // Fly to a garden with a fresh journal you haven't read, and open it.
+  const readSomethingNew = () => {
+    const pick = freshTargets[Math.floor(Math.random() * freshTargets.length)];
+    if (!pick) return;
+    startVisit(pick.placement);
+    setFocusPostId(pick.postId);
+    buzz(10);
   };
 
   const goTo = (next: Mode) => {
@@ -1491,6 +1528,7 @@ export default function WorldGardenScene({
                 cache={cache}
                 gray={Boolean(me)}
                 now={now}
+                beamPostId={freshByGarden.get(placement.garden.userId)}
                 onTap={handlePieceTap}
                 onVisit={startVisit}
               />
@@ -1510,6 +1548,7 @@ export default function WorldGardenScene({
               activePostId={activePostId}
               focusPostId={focusPostId}
               dim={readingDim}
+              beamPostId={freshByGarden.get(visit.placement.garden.userId)}
               onGone={() => setVisit((current) => (current?.leaving ? null : current))}
             />
           ) : null}
@@ -1639,6 +1678,7 @@ export default function WorldGardenScene({
           total={readable.posts.length}
           owner={readable.owner}
           canWater={!demo && Boolean(readable.owner)}
+          live={!demo}
           onPrevious={() => setFocusPostId(readable.posts[Math.max(0, readingIndex - 1)]._id)}
           onNext={() => setFocusPostId(readable.posts[Math.min(readable.posts.length - 1, readingIndex + 1)]._id)}
           onClose={() => {
@@ -1822,6 +1862,12 @@ export default function WorldGardenScene({
           <span />
         )}
         <div className="flex items-end gap-2">
+          {mode === "world" && freshTargets.length > 0 ? (
+            <PillButton primary onClick={readSomethingNew} label={`Read a new journal (${freshTargets.length} waiting)`}>
+              <Sparkles className="size-4 shrink-0" aria-hidden="true" /> New
+              <span className="rounded-full bg-primary-foreground/20 px-1.5 text-xs tabular-nums">{freshTargets.length}</span>
+            </PillButton>
+          ) : null}
           {mode === "visit" && garden && visit ? (
             garden.giftedToday.includes(visit.placement.garden.userId) ? (
               <p className={cn("flex h-12 items-center gap-1.5 rounded-full px-4 text-sm font-medium whitespace-nowrap text-foreground/70", glassSurface)}>

@@ -71,6 +71,13 @@ export default defineSchema({
   })
     .index("by_to", ["toUserId"])
     .index("by_from_to", ["fromUserId", "toUserId"]),
+  // Who has read a journal. Authors only ever see the count.
+  postReads: defineTable({
+    postId: v.id("posts"),
+    readerId: v.string(),
+  })
+    .index("by_postId", ["postId"])
+    .index("by_reader_post", ["readerId", "postId"]),
   plantReactions: defineTable({
     postId: v.id("posts"),
     userId: v.string(),
