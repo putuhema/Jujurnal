@@ -16,6 +16,8 @@ export type IslandPost = {
   reactionCount?: number;
   // Times its author watered it (helps it grow).
   selfWaterings?: number;
+  // The day its author last watered it.
+  selfWateredOn?: string;
 };
 
 // three.js only loads once a garden is on screen.

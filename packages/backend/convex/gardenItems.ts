@@ -30,3 +30,8 @@ export const longestStreak = (dates: Iterable<string>) => {
   }
   return longest;
 };
+
+// Weeds: one creeps into your garden every so often while you're away, up to
+// a handful. Pulling them all starts the clock again.
+export const WEEDS = { everyMs: 10 * 60 * 60 * 1000, max: 5 };
+export const weedCount = (since: number, now: number) => Math.max(0, Math.min(WEEDS.max, Math.floor((now - since) / WEEDS.everyMs)));

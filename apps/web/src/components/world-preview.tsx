@@ -53,6 +53,8 @@ export const WorldPreview = () => {
   const [arrangement, setArrangement] = useState<Arrangement>({ moves: [], decorations: [] });
   const [giftedToday, setGiftedToday] = useState<string[]>([]);
   const [neighbours, setNeighbours] = useState<string[]>([]);
+  // A few weeds to pull in the sample garden.
+  const [weeds, setWeeds] = useState(() => ({ since: Date.now() - 40 * 60 * 60 * 1000, pulled: [] as number[] }));
   const [gifts, setGifts] = useState<GiftView[]>(() => [
     { _id: "gift-1", _creationTime: Date.now() - 3_600_000, kind: "fireflies", note: "Your garden made my evening. Thank you for sharing it.", read: false, from: "Citra" },
     { _id: "gift-2", _creationTime: Date.now() - 86_400_000, kind: "pebble", read: true, from: "Bima" },
@@ -73,6 +75,11 @@ export const WorldPreview = () => {
     onRemoveGift: (id) => setGifts((list) => list.filter((gift) => gift._id !== id)),
     onWaterOwn: async () => "watered",
     neighbours,
+    weeds,
+    onPullWeed: async (index) => {
+      setWeeds((current) => ({ ...current, pulled: [...current.pulled, index] }));
+      return { status: "pulled" };
+    },
     onToggleNeighbour: async (userId) => {
       const added = !neighbours.includes(userId);
       setNeighbours((list) => (added ? [...list, userId] : list.filter((id) => id !== userId)));

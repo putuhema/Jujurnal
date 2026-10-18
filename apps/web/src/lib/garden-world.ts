@@ -5,6 +5,7 @@ import {
   buildIsland,
   createPlant,
   createRandom,
+  getGrowthStage,
   getPlantGrowth,
   totalWaterings,
   islandStyles,
@@ -154,7 +155,7 @@ export function* growPiecePlants(posts: WorldPost[], layout: GardenLayout, now: 
   for (let index = 0; index < count; index++) {
     const post = posts[index];
     const plot = layout.plots[index];
-    const { geometry } = createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, detail: 0.35 });
+    const { geometry } = createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, stage: getGrowthStage(post._creationTime, now, totalWaterings(post)), detail: 0.35 });
     // Merged into the piece below, which gets its own bounds.
     geometry.boundingBox = null;
     geometry.boundingSphere = null;

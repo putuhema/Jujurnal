@@ -50,6 +50,7 @@ export const HomeGarden = () => {
   const neighbours = useQuery(api.neighbours.mine, myId ? {} : "skip");
   const toggleNeighbour = useMutation(api.neighbours.toggle);
   const waterOwn = useMutation(api.reactions.waterOwn);
+  const pullWeed = useMutation(api.garden.pullWeed);
   const saveArrangement = useMutation(api.garden.saveArrangement);
   const sendGift = useMutation(api.gifts.send);
   const markGiftsRead = useMutation(api.gifts.markAllRead);
@@ -102,9 +103,11 @@ export const HomeGarden = () => {
             onWaterOwn: async (postId) => (await waterOwn({ postId: postId as Id<"posts">, timeZone })).status,
             neighbours: neighbours ?? [],
             onToggleNeighbour: async (userId) => (await toggleNeighbour({ neighbourId: userId })).status,
+            weeds: mine.weeds,
+            onPullWeed: (index) => pullWeed({ index }),
           }
         : undefined,
-    [myId, mine, gifts, giftedToday, neighbours, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift, waterOwn, toggleNeighbour]
+    [myId, mine, gifts, giftedToday, neighbours, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift, waterOwn, toggleNeighbour, pullWeed]
   );
 
   const close = useMemo(() => new Set(neighbours ?? []), [neighbours]);

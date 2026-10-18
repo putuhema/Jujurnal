@@ -671,8 +671,36 @@ const speciesVariants: Partial<Record<keyof typeof flowerForms, Variant[]>> = {
   ],
 };
 
-const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlooms: number, wilt: number, style: HeadStyle = {}) => {
+// A closed bud: a green-sheathed teardrop with a hint of the petal colour at its tip.
+const budParts = (palette: Palette, stemRadius: number, scale: number) => {
+  const size = 0.034 * scale;
+  const bud = part(new THREE.SphereGeometry(1, resolution(12, 6), resolution(10, 4)), palette.stem.clone().lerp(palette.petal, 0.55), { position: [0, size * 1.1, 0], scale: [size * 0.75, size * 1.6, size * 0.75] }, { smooth: true, shade: 0.35, tint: palette.petal });
+  return [bud, dome(stemRadius * 2.6, 1.3, palette.stem, [0, -stemRadius, 0])];
+};
+
+// A seedling: a short stem and a pair of round seed leaves.
+const growSprout = (seed: string, palette: Palette, wilt: number) => {
+  const random = createRandom(`sprout:${seed}`);
+  const lean = random.range(0, Math.PI * 2);
+  const height = random.range(0.18, 0.22);
+  const tip = new THREE.Vector3(Math.cos(lean) * 0.015, height, Math.sin(lean) * 0.015);
+  const body = stem([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, height * 0.55, 0), tip], 0.008, palette.stem);
+  const parts = [body.geometry];
+  const turn = random.range(0, Math.PI);
+  for (const side of [0, Math.PI]) {
+    const leaf = blade({ length: 0.12, width: 0.085, widest: 0.5, pointy: 0.6, cup: 0.45, fold: 0.15, curl: 0.05 - wilt * 0.3 }, palette.leaf, palette.leafTip, turn + side, 0.45 - wilt * 0.3);
+    parts.push(applyMatrix(leaf, matrix.makeTranslation(tip.x, tip.y - 0.005, tip.z)));
+  }
+  // The first true leaf, just unfurling between them.
+  const shoot = blade({ length: 0.06, width: 0.03, widest: 0.5, pointy: 1, cup: 0.6, curl: 0.3 }, palette.leafTip, palette.leafTip, turn + Math.PI / 2, 1.2);
+  parts.push(applyMatrix(shoot, matrix.makeTranslation(tip.x, tip.y, tip.z)));
+  return parts;
+};
+
+const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlooms: number, wilt: number, style: HeadStyle = {}, stage: GrowthStage = "bloom") => {
   const parts: THREE.BufferGeometry[] = [];
+  // Younger plants are shorter; their heads are closed buds, or not there yet.
+  const stature = stage === "young" ? 0.62 : stage === "bud" ? 0.85 : 1;
   const stems = Math.min(form.stems[1] + 4, random.int(form.stems[0], form.stems[1]) + extraBlooms);
   // Lean flower faces toward the viewer so heads read from the isometric camera.
   const towardCamera = new THREE.Vector3(1, 0, 1).normalize();
@@ -680,7 +708,7 @@ const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlo
   for (let index = 0; index < stems; index++) {
     const angle = (index / stems) * Math.PI * 2 + random.range(-0.4, 0.4);
     const offset = index === 0 ? random.range(0, 0.03) : random.range(form.spread * 0.4, form.spread);
-    const height = random.range(form.height[0], form.height[1]) * (index === 0 ? 1.08 : random.range(0.75, 1));
+    const height = random.range(form.height[0], form.height[1]) * (index === 0 ? 1.08 : random.range(0.75, 1)) * stature;
     const base = new THREE.Vector3(Math.cos(angle) * offset * 0.5, 0, Math.sin(angle) * offset * 0.5);
     const lean = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(offset);
     const points = [
@@ -693,12 +721,19 @@ const growFlower = (form: FlowerForm, random: Random, palette: Palette, extraBlo
     parts.push(body.geometry);
 
     const direction = body.direction.clone().addScaledVector(towardCamera, form.nod * 0.5).add(new THREE.Vector3(0, -wilt * 1.2, 0)).normalize();
+    // The head is always grown (so the rest of the plant comes out the same at
+    // every stage), then swapped for a bud or dropped while the plant is young.
     const head = heads[form.head](random, palette, style);
     const scale = random.range(form.headScale[0], form.headScale[1]);
-    for (const piece of head) applyMatrix(piece, matrix.makeScale(scale, scale, scale));
-    // Small green sepal cup where the head meets the stem.
-    if (form.head !== "lavender" && form.head !== "hydrangea" && form.head !== "allium" && form.head !== "bellflower") head.push(dome(form.stemRadius * 2.2, 0.8, palette.stem, [0, -form.stemRadius, 0]));
-    parts.push(...mountHead(head, body.tip, direction));
+    if (stage !== "bloom") {
+      for (const piece of head) piece.dispose();
+      if (stage === "bud") parts.push(...mountHead(budParts(palette, form.stemRadius, scale), body.tip, direction));
+    } else {
+      for (const piece of head) applyMatrix(piece, matrix.makeScale(scale, scale, scale));
+      // Small green sepal cup where the head meets the stem.
+      if (form.head !== "lavender" && form.head !== "hydrangea" && form.head !== "allium" && form.head !== "bellflower") head.push(dome(form.stemRadius * 2.2, 0.8, palette.stem, [0, -form.stemRadius, 0]));
+      parts.push(...mountHead(head, body.tip, direction));
+    }
 
     if (form.leaves.on === "stem") {
       const curve = new THREE.CatmullRomCurve3(points);
@@ -815,7 +850,7 @@ const growFern = (random: Random, _palette: Palette, extraLeaves: number, wilt: 
 };
 
 // A ribbed barrel or column cactus, crowned with a few blooms.
-const growCactus = (random: Random, palette: Palette, extraBlooms: number, wilt: number) => {
+const growCactus = (random: Random, palette: Palette, extraBlooms: number, wilt: number, stage: GrowthStage = "bloom") => {
   const parts: THREE.BufferGeometry[] = [];
   const body = desaturate(hsl(random.range(105, 135), random.range(0.32, 0.45), random.range(0.4, 0.48)), wilt);
   const ribs = random.int(8, 12);
@@ -853,7 +888,11 @@ const growCactus = (random: Random, palette: Palette, extraBlooms: number, wilt:
     const at = new THREE.Vector3(Math.cos(angle) * spread, height * (index === 0 ? 1 : 0.92), Math.sin(angle) * spread);
     const flower = ring(random.int(10, 14), random, 0.1).map((petal) => blade({ length: 0.045, width: 0.018, widest: 0.6, pointy: 0.9, cup: 0.4, curl: 0.05 }, palette.petalBase, palette.petal, petal, 0.55 - wilt * 0.3, 0.006));
     flower.push(dome(0.01, 0.8, palette.pollen));
-    parts.push(...mountHead(flower, at, new THREE.Vector3(Math.cos(angle) * 0.3, 1, Math.sin(angle) * 0.3)));
+    if (stage === "bloom") parts.push(...mountHead(flower, at, new THREE.Vector3(Math.cos(angle) * 0.3, 1, Math.sin(angle) * 0.3)));
+    else {
+      for (const piece of flower) piece.dispose();
+      if (stage === "bud") parts.push(bead(0.016, palette.petalBase.clone().lerp(palette.stem, 0.4), at));
+    }
   }
   return parts;
 };
@@ -909,8 +948,13 @@ export type PlantModel = {
   vitality: number;
 };
 
+// How far along a plant is: a seedling, a leafy young plant, in bud, or in full bloom.
+export type GrowthStage = "sprout" | "young" | "bud" | "bloom";
+
 type PlantOptions = {
   mood: MoodGrade;
+  // Leave out for a fully grown plant.
+  stage?: GrowthStage;
   waterings?: number;
   // When the journal was written. Before VARIETY_SINCE a plant grows exactly as it always has.
   plantedAt?: number;
@@ -934,7 +978,7 @@ const variantsOf = (archetype: PlantArchetype): Variant[] | undefined =>
 // The variant names a species can grow, classic first (for the plant lab).
 export const plantVariants = (archetype: PlantArchetype) => variantsOf(archetype)?.map((variant) => variant.name) ?? ["classic"];
 
-const growPlant = (seed: string, { mood, waterings = 0, plantedAt, archetype: forcedArchetype, variant: forcedVariant }: Omit<PlantOptions, "detail">): PlantModel => {
+const growPlant = (seed: string, { mood, waterings = 0, plantedAt, archetype: forcedArchetype, variant: forcedVariant, stage = "bloom" }: Omit<PlantOptions, "detail">): PlantModel => {
   const random = createRandom(`plant:${seed}`);
   let archetype: PlantArchetype = pickWeighted(random, archetypeWeights);
 
@@ -960,11 +1004,12 @@ const growPlant = (seed: string, { mood, waterings = 0, plantedAt, archetype: fo
   const extra = Math.min(waterings, 4);
   const wilt = desaturation * 0.5;
   const parts =
-    archetype === "monstera" ? growMonstera(random, palette, extra, desaturation, variant?.name === "variegated")
+    stage === "sprout" ? growSprout(seed, palette, wilt)
+    : archetype === "monstera" ? growMonstera(random, palette, extra, desaturation, variant?.name === "variegated")
     : archetype === "succulent" ? growSucculent(random, palette, extra, wilt)
     : archetype === "fern" ? growFern(random, palette, extra, desaturation)
-    : archetype === "cactus" ? growCactus(random, palette, extra, wilt)
-    : growFlower({ ...flowerForms[archetype as keyof typeof flowerForms], ...variant?.form } as FlowerForm, random, palette, extra, wilt, variant?.style ?? {});
+    : archetype === "cactus" ? growCactus(random, palette, extra, wilt, stage)
+    : growFlower({ ...flowerForms[archetype as keyof typeof flowerForms], ...variant?.form } as FlowerForm, random, palette, extra, wilt, variant?.style ?? {}, stage);
 
   const geometry = merge(parts);
   applyMatrix(geometry, matrix.makeRotationY(random.range(0, Math.PI * 2)));
@@ -992,6 +1037,18 @@ export const getPlantGrowth = (createdAt: number, now = Date.now(), waterings = 
   const days = Math.max(0, (now - createdAt) / 86_400_000) + waterings;
   const progress = Math.min(1, days / 4);
   return 0.5 + 0.5 * (1 - (1 - progress) ** 2) + Math.min(waterings, 5) * 0.02;
+};
+
+// A plant moves from sprout to young plant to bud to bloom over about three
+// days, and each watering moves it along as if another day had passed.
+export const getGrowthStage = (createdAt: number, now = Date.now(), waterings = 0): GrowthStage => {
+  const days = Math.max(0, (now - createdAt) / 86_400_000) + waterings;
+  return days < 1 ? "sprout" : days < 2 ? "young" : days < 3 ? "bud" : "bloom";
+};
+// How far a plant is from its next stage (0 to 1), for a progress ring.
+export const stageProgress = (createdAt: number, now = Date.now(), waterings = 0) => {
+  const days = Math.max(0, (now - createdAt) / 86_400_000) + waterings;
+  return days >= 3 ? 1 : days % 1;
 };
 
 // Every watering a plant has had: friends' and its author's own.

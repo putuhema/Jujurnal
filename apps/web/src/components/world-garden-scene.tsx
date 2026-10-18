@@ -17,12 +17,15 @@ import { toast } from "sonner";
 import * as THREE from "three";
 import { getCalendarDate } from "@/lib/calendar-date";
 import { cn, glassSurface } from "@/lib/utils";
-import { createPlant, createRandom, getPlantGrowth, totalWaterings, type GardenLayout, type MoodGrade, type PlantModel } from "@/lib/garden-procedural";
+import { createPlant, createRandom, getGrowthStage, getPlantGrowth, totalWaterings, type GrowthStage, type GardenLayout, type MoodGrade, type PlantModel } from "@/lib/garden-procedural";
 import { arrangePlots, cellAt, emptyArrangement, freeCells, type Arrangement } from "@/lib/garden-arrangement";
 import { getAtmosphereLook, getDayPart, getSeason, getWeather, describeAtmosphere, type Atmosphere, type DayPart, type Season, type Weather } from "@/lib/garden-atmosphere";
 import { makePostcard, sharePostcard } from "@/lib/garden-postcard";
 import { startAmbience, stopAmbience, updateAmbience } from "@/lib/garden-sounds";
-import type { GiftKind } from "@puma-brain/backend/convex/gardenItems";
+import { weedCount, type GiftKind } from "@puma-brain/backend/convex/gardenItems";
+import { format } from "date-fns";
+import { DropIcon } from "@phosphor-icons/react";
+import { PULL_SECONDS, Weed } from "./garden-care";
 import { Bee, Cat, Decoration, FreeCellMarkers, Frog, Gift } from "./garden-objects";
 import { Fireflies, WeatherEffects, useAtmosphereLights } from "./garden-weather";
 import { GardenEditor, type EditorHeld } from "./garden-editor";
@@ -75,6 +78,9 @@ export type MyGarden = {
   // Gardens you keep close: they sit next to yours and their new journals come first.
   neighbours: string[];
   onToggleNeighbour: (userId: string) => Promise<"added" | "removed" | "full" | "unavailable" | "signedOut">;
+  // Weeds grow back from `since`; `pulled` are the ones pulled already.
+  weeds: { since: number; pulled: number[] };
+  onPullWeed: (index: number) => Promise<{ status: "pulled" | "gone" | "signedOut"; cleared?: boolean }>;
 };
 export type WaterResult = "watered" | "already" | "signedOut" | "unavailable";
 
@@ -241,20 +247,21 @@ function* buildOtherPiece(placement: Placement, now: number): PieceJob {
 
 // Plant models keyed by everything that shapes them, so adding one journal
 // grows one new plant instead of regenerating the whole garden.
-const usePlantModels = (posts: WorldPost[], detail = 1) => {
+const usePlantModels = (posts: WorldPost[], now: number, detail = 1) => {
   const cache = useRef(new Map<string, PlantModel>());
   const models = useMemo(() => {
     const next = new Map<string, PlantModel>();
     const list = posts.map((post) => {
-      const key = `${post._id}:${post.mood}:${post.reactionCount ?? 0}:${detail}`;
-      const model = cache.current.get(key) ?? next.get(key) ?? createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, detail });
+      const stage = getGrowthStage(post._creationTime, now, totalWaterings(post));
+      const key = `${post._id}:${post.mood}:${post.reactionCount ?? 0}:${stage}:${detail}`;
+      const model = cache.current.get(key) ?? next.get(key) ?? createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, stage, detail });
       next.set(key, model);
       return model;
     });
     for (const [key, model] of cache.current) if (!next.has(key)) model.geometry.dispose();
     cache.current = next;
     return list;
-  }, [posts, detail]);
+  }, [posts, now, detail]);
   useEffect(() => () => {
     for (const model of cache.current.values()) model.geometry.dispose();
     cache.current.clear();
@@ -732,6 +739,8 @@ export default function WorldGardenScene({
   const [planting, setPlanting] = useState<{ postId: string; key: number } | null>(null);
   const [replay, setReplay] = useState<{ day: number; playing: boolean } | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
+  // Your plants watered this visit, before the server confirms it.
+  const [wateredHere, setWateredHere] = useState<Set<string>>(() => new Set());
   const [waterEffects, setWaterEffects] = useState<WaterEffect[]>([]);
   // The journal being read in the side panel.
   const [focusPostId, setFocusPostId] = useState<string | null>(null);
@@ -779,7 +788,7 @@ export default function WorldGardenScene({
   const mine = placements.find((placement) => placement.isMine) ?? null;
   const myPosts = useMemo(() => sortByTime(me?.posts ?? []), [me]);
   const myLayout = useMemo(() => (me ? createPieceLayout(me.userId, 0, 0, myPosts.length) : null), [me, myPosts.length]);
-  const myPlants = usePlantModels(myPosts);
+  const myPlants = usePlantModels(myPosts, now);
   useEffect(() => () => {
     myLayout?.island.dispose();
     myLayout?.water?.dispose();
@@ -809,7 +818,7 @@ export default function WorldGardenScene({
     () => (visit ? createPieceLayout(visit.placement.garden.userId, visit.placement.gx, visit.placement.gz, visitPosts.length) : null),
     [visit?.placement, visitPosts.length]
   );
-  const visitPlants = usePlantModels(visitPosts);
+  const visitPlants = usePlantModels(visitPosts, now);
   const visitArranged = useMemo(
     () =>
       visitLayout && visit
@@ -959,6 +968,82 @@ export default function WorldGardenScene({
     });
     return { cat, frog, bee, gifts, decorations, center: scene.center, seed: scene.seed, free: open };
   }, [mode, visitArranged, visit, visitPosts, visitPlants, myArranged, me, myPosts, myPlants, arrangement, garden?.gifts, now]);
+
+  // --- Garden care: thirsty young plants, weeds, and plants moving up a stage ---
+  const today = format(clock, "yyyy-MM-dd");
+  const caring = mode === "garden" && Boolean(garden) && !editing && !replay && !planting;
+  // Plants still growing want water once a day; blooming ones are happy.
+  const thirsty = useMemo(
+    () =>
+      caring && myArranged
+        ? myPosts.flatMap((post, index) => {
+            const plot = myArranged.plots[index];
+            if (!plot || getGrowthStage(post._creationTime, now, totalWaterings(post)) === "bloom") return [];
+            if (post.selfWateredOn === today || wateredHere.has(post._id)) return [];
+            return [{ post, index, plot }];
+          })
+        : [],
+    [caring, myArranged, myPosts, now, today, wateredHere]
+  );
+  // Weeds creep onto free grass while you're away; pulled ones animate out first.
+  const [pulledHere, setPulledHere] = useState<number[]>([]);
+  const [pulling, setPulling] = useState<number[]>([]);
+  const weedSince = garden?.weeds.since;
+  useEffect(() => setPulledHere([]), [weedSince]);
+  const weeds = useMemo(() => {
+    if (!garden || !residents || mode !== "garden" || editing) return [];
+    const free = [...residents.free];
+    const list: { index: number; spot: { x: number; y: number; z: number }; pulling: boolean }[] = [];
+    for (let index = 0; index < weedCount(garden.weeds.since, clock.getTime()); index++) {
+      if (!free.length) break;
+      const [cell] = free.splice(Math.floor(createRandom(`weed:${garden.weeds.since}:${index}`).next() * free.length), 1);
+      if (garden.weeds.pulled.includes(index) || pulledHere.includes(index)) continue;
+      list.push({ index, spot: { x: cell.x, y: cell.top, z: cell.z }, pulling: pulling.includes(index) });
+    }
+    return list;
+  }, [garden, residents, mode, editing, clock, pulledHere, pulling]);
+  const pullWeed = (index: number) => {
+    if (!garden || pulling.includes(index)) return;
+    buzz(14);
+    if (soundOn) playGardenSound("click");
+    setPulling((list) => [...list, index]);
+    window.setTimeout(() => {
+      setPulling((list) => list.filter((item) => item !== index));
+      setPulledHere((list) => [...list, index]);
+    }, PULL_SECONDS * 1000);
+    void garden.onPullWeed(index).catch(() => toast.error("Couldn't pull that weed. Try again?"));
+  };
+  const careTasks = thirsty.length + weeds.filter((weed) => !weed.pulling).length;
+  // A thank-you when the last task of the day is done.
+  const hadTasks = useRef(false);
+  useEffect(() => {
+    if (!caring) return;
+    if (careTasks > 0) hadTasks.current = true;
+    else if (hadTasks.current) {
+      hadTasks.current = false;
+      if (soundOn) playGardenSound("bloom");
+      toast("Your garden is all tended. It looks happy today.");
+    }
+  }, [careTasks, caring, soundOn]);
+  // When care moves a plant to its next stage, celebrate it.
+  const stages = useRef(new Map<string, GrowthStage>());
+  const [stageBursts, setStageBursts] = useState<{ key: string; at: { x: number; y: number; z: number }; colors: string[] }[]>([]);
+  useEffect(() => {
+    if (!myArranged) return;
+    myPosts.forEach((post, index) => {
+      const stage = getGrowthStage(post._creationTime, now, totalWaterings(post));
+      const before = stages.current.get(post._id);
+      stages.current.set(post._id, stage);
+      const plot = myArranged.plots[index];
+      if (!before || before === stage || !plot) return;
+      const key = `${post._id}:${stage}`;
+      const colors = stage === "bloom" && myPlants[index] ? petalColors(myPlants[index]) : ["#9ad46a", "#c8ec9a", "#6fb34a", "#e9f7c8"];
+      setStageBursts((list) => [...list, { key, at: plot, colors }]);
+      window.setTimeout(() => setStageBursts((list) => list.filter((burst) => burst.key !== key)), 2600);
+      toast(stage === "bloom" ? "It bloomed! Your care paid off." : stage === "bud" ? "Buds are forming." : "Your sprout grew its first real leaves.");
+      if (soundOn && stage === "bloom") window.setTimeout(() => playGardenSound("gift"), 400);
+    });
+  }, [myPosts, myPlants, myArranged, now, soundOn]);
 
   // --- Camera framing ---
   const home = mine?.center ?? placements[0]?.center ?? new THREE.Vector3();
@@ -1146,7 +1231,7 @@ export default function WorldGardenScene({
       else if (result === "unavailable") toast("This flower can't be watered.");
       else {
         buzz([10, 40, 18]);
-        const model = createPlant(post._id, { mood: post.mood, waterings: (post.reactionCount ?? 0) + 1, plantedAt: post._creationTime, detail: 0.35 });
+        const model = createPlant(post._id, { mood: post.mood, waterings: (post.reactionCount ?? 0) + 1, plantedAt: post._creationTime, stage: getGrowthStage(post._creationTime, now, totalWaterings(post) + 1), detail: 0.35 });
         const height = model.height * getPlantGrowth(post._creationTime, now, totalWaterings(post) + 1);
         playWater(plot, height, { post, model });
       }
@@ -1169,19 +1254,31 @@ export default function WorldGardenScene({
   // someone else's. The panel only asks when it hasn't been watered yet, so the
   // can starts pouring straight away while the server catches up.
   const [ownPulse, setOwnPulse] = useState({ postId: "", count: 0 });
+  // Your own plant: pour straight away, and count it as watered today while the server catches up.
+  const waterOwnPlant = async (post: WorldPost, plot: { x: number; y: number; z: number }, model?: PlantModel) => {
+    const height = (model?.height ?? 0.6) * getPlantGrowth(post._creationTime, now, totalWaterings(post) + 1);
+    buzz([10, 40, 18]);
+    playWater(plot, height);
+    setWateredHere((set) => new Set(set).add(post._id));
+    window.setTimeout(() => setOwnPulse((pulse) => ({ postId: post._id, count: pulse.count + 1 })), WATERING_HIT * 1000);
+    const result = garden ? await garden.onWaterOwn(post._id).catch(() => "failed" as const) : "unavailable";
+    if (result !== "watered" && result !== "already") {
+      toast.error("Couldn't water it. Try again?");
+      setWateredHere((set) => {
+        const next = new Set(set);
+        next.delete(post._id);
+        return next;
+      });
+    }
+  };
   const waterReading = async () => {
     if (!reading?.plot || !readable) return;
     const { post, plot } = reading;
     const model = readable.models[readingIndex];
+    if (!readable.owner) return waterOwnPlant(post, plot, model);
     const height = (model?.height ?? 0.6) * getPlantGrowth(post._creationTime, now, totalWaterings(post) + 1);
     buzz([10, 40, 18]);
     playWater(plot, height);
-    if (!readable.owner) {
-      window.setTimeout(() => setOwnPulse((pulse) => ({ postId: post._id, count: pulse.count + 1 })), WATERING_HIT * 1000);
-      const result = garden ? await garden.onWaterOwn(post._id).catch(() => "failed" as const) : "unavailable";
-      if (result !== "watered" && result !== "already") toast.error("Couldn't water it. Try again?");
-      return;
-    }
     const result = await onWater(post._id).catch(() => "failed" as const);
     if (result === "signedOut") toast("Log in to water other people's flowers.");
     else if (result === "unavailable") toast("This flower can't be watered.");
@@ -1637,6 +1734,12 @@ export default function WorldGardenScene({
             </group>
           ) : null}
 
+          {weeds.map((weed) => (
+            <Weed key={`${weedSince}:${weed.index}`} spot={weed.spot} seed={`${weedSince}:${weed.index}`} pulling={weed.pulling} still={still} />
+          ))}
+          {!still
+            ? stageBursts.map((burst) => <BloomBurst key={burst.key} position={burst.at} colors={burst.colors} delay={WATERING_HIT + 0.3} />)
+            : null}
           {waterEffects.map((effect) => (
             <WaterSplash key={effect.id} effect={effect} now={now} still={still} onDone={finishWaterEffect} />
           ))}
@@ -1772,6 +1875,69 @@ export default function WorldGardenScene({
             </span>
           </p>
         </div>
+      ) : null}
+
+      {showHitAreas && caring && !isReading
+        ? (
+            <>
+              {thirsty.map(({ post, index, plot }) => {
+                const height = (myPlants[index]?.height ?? 0.4) * getPlantGrowth(post._creationTime, now, totalWaterings(post));
+                const at = projectPoint(camera, plot.x, plot.y + height, plot.z);
+                return (
+                  <button
+                    key={`thirsty-${post._id}`}
+                    type="button"
+                    onClick={() => void waterOwnPlant(post, plot, myPlants[index])}
+                    aria-label="This plant is thirsty. Water it."
+                    title="Thirsty. Tap to water"
+                    className="group absolute z-[700] flex size-11 -translate-x-1/2 -translate-y-[120%] cursor-pointer items-center justify-center rounded-full outline-none"
+                    style={{ left: `${at.left}%`, top: `${at.top}%` }}
+                  >
+                    <span className="flex size-8 items-center justify-center rounded-full bg-sky-100/95 text-sky-600 shadow-md ring-1 ring-sky-300/60 transition-transform duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-active:scale-90 motion-safe:animate-[bob_2.4s_ease-in-out_infinite] dark:bg-sky-950/90 dark:text-sky-300">
+                      <DropIcon weight="fill" className="size-4" />
+                    </span>
+                  </button>
+                );
+              })}
+              {weeds.map((weed) => {
+                if (weed.pulling) return null;
+                const at = projectPoint(camera, weed.spot.x, weed.spot.y + 0.08, weed.spot.z);
+                return (
+                  <button
+                    key={`weed-${weed.index}`}
+                    type="button"
+                    onClick={() => pullWeed(weed.index)}
+                    aria-label="Pull this weed"
+                    title="Pull the weed"
+                    className="absolute z-[650] size-11 -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full outline-none hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-ring"
+                    style={{ left: `${at.left}%`, top: `${at.top}%` }}
+                  />
+                );
+              })}
+            </>
+          )
+        : null}
+
+      {caring && careTasks > 0 && !showHint && !isReading ? (
+        <p
+          role="status"
+          className={cn(
+            "pointer-events-none absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] left-1/2 z-[2000] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-xs font-medium whitespace-nowrap text-foreground/80 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-2 motion-safe:duration-300",
+            glassSurface,
+          )}
+        >
+          <span className="font-semibold">Today's care</span>
+          {thirsty.length ? (
+            <span className="inline-flex items-center gap-1 text-sky-700 dark:text-sky-300">
+              <DropIcon weight="fill" className="size-3.5" /> {thirsty.length} thirsty
+            </span>
+          ) : null}
+          {weeds.filter((weed) => !weed.pulling).length ? (
+            <span className="inline-flex items-center gap-1 text-lime-800 dark:text-lime-300">
+              <Sprout className="size-3.5" aria-hidden="true" /> {weeds.filter((weed) => !weed.pulling).length} {weeds.filter((weed) => !weed.pulling).length === 1 ? "weed" : "weeds"}
+            </span>
+          ) : null}
+        </p>
       ) : null}
 
       {showHint ? (

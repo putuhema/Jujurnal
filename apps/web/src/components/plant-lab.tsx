@@ -8,6 +8,7 @@ import { ArrowsClockwiseIcon, ShuffleIcon } from "@phosphor-icons/react";
 import {
   createIsometricCamera,
   createPlant,
+  getGrowthStage,
   getPlantGrowth,
   moodGrayscale,
   plantArchetypes,
@@ -37,7 +38,7 @@ const usePlant = (seed: string, options: Parameters<typeof createPlant>[1]) => {
   const plant = useMemo(
     () => createPlant(seed, options),
     // options is rebuilt each render, so depend on its fields.
-    [seed, options.mood, options.waterings, options.archetype, options.variant]
+    [seed, options.mood, options.waterings, options.archetype, options.variant, options.stage]
   );
   useEffect(() => () => plant.geometry.dispose(), [plant]);
   return plant;
@@ -195,7 +196,8 @@ export default function PlantLab() {
 
   const forced = archetype === "random" ? undefined : archetype;
   const forcedVariant = forced && variant !== "random" ? variant : undefined;
-  const plant = usePlant(selectedSeed, { mood, waterings, archetype: forced, variant: forcedVariant });
+  // The age slider walks the plant through its stages: sprout, young, bud, bloom.
+  const plant = usePlant(selectedSeed, { mood, waterings, archetype: forced, variant: forcedVariant, stage: getGrowthStage(0, ageDays * 86_400_000) });
   const growth = getPlantGrowth(0, ageDays * 86_400_000);
   const triangles = plant.geometry.attributes.position.count / 3;
 

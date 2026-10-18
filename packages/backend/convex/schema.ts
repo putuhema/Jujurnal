@@ -64,6 +64,9 @@ export default defineSchema({
         turn: v.number(),
       })
     ),
+    // Weeds creep in while you're away (see WEEDS); these are the ones pulled
+    // since they started growing back.
+    weeds: v.optional(v.object({ since: v.number(), pulled: v.array(v.number()) })),
   }).index("by_userId", ["userId"]),
   // Small gifts left in someone's garden. Notes are only ever shown to the recipient.
   gifts: defineTable({

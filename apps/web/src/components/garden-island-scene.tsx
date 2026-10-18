@@ -9,6 +9,7 @@ import {
   createGardenLayout,
   createPlant,
   getGardenPivot,
+  getGrowthStage,
   getPlantGrowth,
   totalWaterings,
   projectToFrame,
@@ -56,7 +57,7 @@ export default function GardenIslandScene({
 
   const layout = useMemo(() => createGardenLayout(seed, sortedPosts.length), [seed, sortedPosts.length]);
   // plantKey captures every input to the plant models.
-  const plants = useMemo(() => sortedPosts.map((post) => createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime })), [plantKey]);
+  const plants = useMemo(() => sortedPosts.map((post) => createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, stage: getGrowthStage(post._creationTime, now, totalWaterings(post)) })), [plantKey]);
   const camera = useMemo(() => {
     const frame = createGardenCamera(layout, FRAME_ASPECT);
     // Keep R3F from refitting the frustum on resize; the frame's aspect ratio is fixed in CSS.

@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { authComponent } from "./auth";
-import { decorationKinds, decorationUnlocks, longestStreak, MAX_DECORATIONS } from "./gardenItems";
+import { decorationKinds, decorationUnlocks, longestStreak, MAX_DECORATIONS, WEEDS, weedCount } from "./gardenItems";
 import { getDateString } from "./helpers";
 
 const kindValidator = v.union(...decorationKinds.map((kind) => v.literal(kind)));
@@ -23,6 +23,8 @@ export const getMine = query({
       longestStreak: longestStreak(posts.map((post) => post.entryDate ?? getDateString(post._creationTime, args.timeZone))),
       // Newest first.
       recentMoods: posts.slice(0, 7).map((post) => post.mood),
+      // Weeds grow from when the garden was last cleared (or first planted).
+      weeds: layout?.weeds ?? { since: layout?._creationTime ?? posts[posts.length - 1]?._creationTime ?? Date.now(), pulled: [] as number[] },
     };
   },
 });
@@ -50,5 +52,27 @@ export const saveArrangement = mutation({
     const existing = await ctx.db.query("gardenLayouts").withIndex("by_userId", (q) => q.eq("userId", user._id)).unique();
     if (existing) await ctx.db.patch(existing._id, { moves, decorations });
     else await ctx.db.insert("gardenLayouts", { userId: user._id, moves, decorations });
+  },
+});
+
+// Pull one weed. Clearing the last one starts them growing back from now.
+export const pullWeed = mutation({
+  args: { index: v.number() },
+  handler: async (ctx, args) => {
+    const user = await authComponent.safeGetAuthUser(ctx);
+    if (!user) return { status: "signedOut" as const };
+    if (!Number.isInteger(args.index) || args.index < 0 || args.index >= WEEDS.max) return { status: "gone" as const };
+    const now = Date.now();
+    const layout = await ctx.db.query("gardenLayouts").withIndex("by_userId", (q) => q.eq("userId", user._id)).unique();
+    const oldest = layout ? null : await ctx.db.query("posts").withIndex("by_authorId", (q) => q.eq("userId", user._id)).order("asc").first();
+    const weeds = layout?.weeds ?? { since: layout?._creationTime ?? oldest?._creationTime ?? now, pulled: [] };
+    const count = weedCount(weeds.since, now);
+    if (args.index >= count || weeds.pulled.includes(args.index)) return { status: "gone" as const };
+    const pulled = [...weeds.pulled, args.index];
+    const cleared = pulled.length >= count;
+    const next = cleared ? { since: now, pulled: [] } : { since: weeds.since, pulled };
+    if (layout) await ctx.db.patch(layout._id, { weeds: next });
+    else await ctx.db.insert("gardenLayouts", { userId: user._id, moves: [], decorations: [], weeds: next });
+    return { status: "pulled" as const, cleared };
   },
 });
