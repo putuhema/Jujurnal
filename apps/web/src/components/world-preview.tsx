@@ -52,6 +52,7 @@ export const WorldPreview = () => {
   // A sample of your garden's extras, kept in memory: everything unlocked, two gifts.
   const [arrangement, setArrangement] = useState<Arrangement>({ moves: [], decorations: [] });
   const [giftedToday, setGiftedToday] = useState<string[]>([]);
+  const [neighbours, setNeighbours] = useState<string[]>([]);
   const [gifts, setGifts] = useState<GiftView[]>(() => [
     { _id: "gift-1", _creationTime: Date.now() - 3_600_000, kind: "fireflies", note: "Your garden made my evening. Thank you for sharing it.", read: false, from: "Citra" },
     { _id: "gift-2", _creationTime: Date.now() - 86_400_000, kind: "pebble", read: true, from: "Bima" },
@@ -70,6 +71,13 @@ export const WorldPreview = () => {
     },
     onMarkGiftsRead: () => setGifts((list) => list.map((gift) => ({ ...gift, read: true }))),
     onRemoveGift: (id) => setGifts((list) => list.filter((gift) => gift._id !== id)),
+    onWaterOwn: async () => "watered",
+    neighbours,
+    onToggleNeighbour: async (userId) => {
+      const added = !neighbours.includes(userId);
+      setNeighbours((list) => (added ? [...list, userId] : list.filter((id) => id !== userId)));
+      return added ? "added" : "removed";
+    },
   };
 
   return (

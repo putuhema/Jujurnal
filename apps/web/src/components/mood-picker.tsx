@@ -54,3 +54,50 @@ export const MoodPicker = ({
     })}
   </div>
 );
+
+// A lighter version for writing: one row of weather, and choosing is optional.
+// Tap the chosen one again to clear it.
+export const MoodRow = ({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: MoodGrade | null;
+  onChange: (grade: MoodGrade | null) => void;
+  disabled?: boolean;
+}) => (
+  <div>
+    <div className="flex items-baseline justify-between gap-2 px-1">
+      <p className="text-sm font-medium" id="mood-row-label">
+        How does it feel? <span className="font-normal text-muted-foreground">Optional</span>
+      </p>
+      <p className="text-xs text-muted-foreground" aria-live="polite">
+        {value ? moodLabels[value] : null}
+      </p>
+    </div>
+    <div role="radiogroup" aria-labelledby="mood-row-label" className="mt-2 grid grid-cols-6 gap-1.5">
+      {moodChoices.map(({ grade, icon: Icon }) => {
+        const isSelected = value !== null && toMoodChoice(value) === grade;
+        return (
+          <button
+            key={grade}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            aria-label={moodLabels[grade]}
+            title={moodLabels[grade]}
+            disabled={disabled}
+            onClick={() => onChange(isSelected ? null : grade)}
+            className={cn(
+              "flex h-11 cursor-pointer items-center justify-center rounded-full border transition-[background-color,color,border-color,transform] duration-150 ease-out active:scale-[0.94] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default disabled:opacity-50",
+              isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border/70 bg-background/50 text-foreground/70 hover:bg-muted"
+            )}
+          >
+            <Icon className="size-5" aria-hidden="true" />
+          </button>
+        );
+      })}
+    </div>
+    {!value ? <p className="mt-1.5 px-1 text-xs text-muted-foreground">Not sure? Skip it, and it grows as a calm, steady plant.</p> : null}
+  </div>
+);

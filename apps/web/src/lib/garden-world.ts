@@ -6,6 +6,7 @@ import {
   createPlant,
   createRandom,
   getPlantGrowth,
+  totalWaterings,
   islandStyles,
   type Cell,
   type GardenLayout,
@@ -157,7 +158,7 @@ export function* growPiecePlants(posts: WorldPost[], layout: GardenLayout, now: 
     // Merged into the piece below, which gets its own bounds.
     geometry.boundingBox = null;
     geometry.boundingSphere = null;
-    const growth = getPlantGrowth(post._creationTime, now);
+    const growth = getPlantGrowth(post._creationTime, now, totalWaterings(post));
     applyMatrix(geometry, matrix.makeScale(growth, growth, growth).setPosition(plot.x, plot.y, plot.z));
     parts.push(geometry);
     yield undefined;

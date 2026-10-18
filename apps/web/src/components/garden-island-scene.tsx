@@ -10,6 +10,7 @@ import {
   createPlant,
   getGardenPivot,
   getPlantGrowth,
+  totalWaterings,
   projectToFrame,
   rotateAroundPivot,
 } from "@/lib/garden-procedural";
@@ -189,7 +190,7 @@ export default function GardenIslandScene({
                   key={post._id}
                   model={model}
                   plot={layout.plots[index]}
-                  growth={getPlantGrowth(post._creationTime, now)}
+                  growth={getPlantGrowth(post._creationTime, now, totalWaterings(post))}
                   delay={index * stagger}
                   isActive={activePostId === post._id}
                   isHighlighted={activePostId === post._id}
@@ -208,7 +209,7 @@ export default function GardenIslandScene({
 
         {sortedPosts.map((post, index) => {
           const plot = rotateAroundPivot(new THREE.Vector3(layout.plots[index].x, layout.plots[index].y, layout.plots[index].z), pivot, angle);
-          const height = plants[index].height * getPlantGrowth(post._creationTime, now);
+          const height = plants[index].height * getPlantGrowth(post._creationTime, now, totalWaterings(post));
           // The hit area follows the plant as the garden turns; its width is the
           // tile's screen width, which doesn't change with rotation.
           const base = projectToFrame(camera, plot.x, plot.y, plot.z);

@@ -40,6 +40,10 @@ export default defineSchema({
     // Kept in step with plantReactions by reactions.toggle, so lists don't
     // have to count reactions per post. Missing on posts from before it existed.
     reactionCount: v.optional(v.number()),
+    // Times the author watered their own plant (once a day), which helps it grow,
+    // and the last day they did.
+    selfWaterings: v.optional(v.number()),
+    selfWateredOn: v.optional(v.string()),
   })
     .index("by_authorId", ["userId"])
     .index("by_authorId_entryDate", ["userId", "entryDate"])
@@ -71,6 +75,14 @@ export default defineSchema({
   })
     .index("by_to", ["toUserId"])
     .index("by_from_to", ["fromUserId", "toUserId"]),
+  // Gardens someone has chosen as neighbours: they sit next to theirs in the
+  // world, and their new journals come first.
+  neighbours: defineTable({
+    userId: v.string(),
+    neighbourId: v.string(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_user_neighbour", ["userId", "neighbourId"]),
   // Who has read a journal. Authors only ever see the count.
   postReads: defineTable({
     postId: v.id("posts"),

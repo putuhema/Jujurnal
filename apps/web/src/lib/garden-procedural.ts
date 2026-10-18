@@ -986,12 +986,16 @@ const growPlant = (seed: string, { mood, waterings = 0, plantedAt, archetype: fo
 };
 
 // A plant reaches full size over its first few days, so the newest journals
-// still look like they're growing in.
-export const getPlantGrowth = (createdAt: number, now = Date.now()) => {
-  const days = Math.max(0, (now - createdAt) / 86_400_000);
+// still look like they're growing in. Each watering (yours or a friend's)
+// counts as an extra day of growing, and well-watered plants grow a little larger.
+export const getPlantGrowth = (createdAt: number, now = Date.now(), waterings = 0) => {
+  const days = Math.max(0, (now - createdAt) / 86_400_000) + waterings;
   const progress = Math.min(1, days / 4);
-  return 0.5 + 0.5 * (1 - (1 - progress) ** 2);
+  return 0.5 + 0.5 * (1 - (1 - progress) ** 2) + Math.min(waterings, 5) * 0.02;
 };
+
+// Every watering a plant has had: friends' and its author's own.
+export const totalWaterings = (post: { reactionCount?: number; selfWaterings?: number }) => (post.reactionCount ?? 0) + (post.selfWaterings ?? 0);
 
 // ---------------------------------------------------------------------------
 // Island

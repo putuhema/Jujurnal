@@ -98,6 +98,7 @@ export const getWorld = query({
                 entryDate: post.entryDate,
                 mood: post.mood,
                 reactionCount: await countReactions(ctx, post),
+                selfWaterings: post.selfWaterings ?? 0,
               }))
           ),
         }))

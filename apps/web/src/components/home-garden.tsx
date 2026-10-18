@@ -47,6 +47,9 @@ export const HomeGarden = () => {
   const mine = useQuery(api.garden.getMine, myId ? { timeZone } : "skip");
   const gifts = useQuery(api.gifts.getMine, myId ? {} : "skip");
   const giftedToday = useQuery(api.gifts.giftedRecently, myId ? {} : "skip");
+  const neighbours = useQuery(api.neighbours.mine, myId ? {} : "skip");
+  const toggleNeighbour = useMutation(api.neighbours.toggle);
+  const waterOwn = useMutation(api.reactions.waterOwn);
   const saveArrangement = useMutation(api.garden.saveArrangement);
   const sendGift = useMutation(api.gifts.send);
   const markGiftsRead = useMutation(api.gifts.markAllRead);
@@ -96,18 +99,23 @@ export const HomeGarden = () => {
             onSendGift: async (toUserId, kind, note) => (await sendGift({ toUserId, kind, note: note.trim() || undefined })).status,
             onMarkGiftsRead: () => void markGiftsRead({}),
             onRemoveGift: (id) => void removeGift({ id: id as Id<"gifts"> }),
+            onWaterOwn: async (postId) => (await waterOwn({ postId: postId as Id<"posts">, timeZone })).status,
+            neighbours: neighbours ?? [],
+            onToggleNeighbour: async (userId) => (await toggleNeighbour({ neighbourId: userId })).status,
           }
         : undefined,
-    [myId, mine, gifts, giftedToday, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift]
+    [myId, mine, gifts, giftedToday, neighbours, timeZone, saveArrangement, sendGift, markGiftsRead, removeGift, waterOwn, toggleNeighbour]
   );
 
+  const close = useMemo(() => new Set(neighbours ?? []), [neighbours]);
   // Everyone else who has planted this month, busiest gardens closest to yours.
   const others = useMemo<WorldGardenEntry[]>(
     () =>
       (world?.gardens ?? [])
         .filter((garden) => garden.userId !== myId && garden.posts.length > 0)
-        .sort((a, b) => b.posts.length - a.posts.length || a.userId.localeCompare(b.userId)),
-    [world, myId]
+        // Your neighbours first (right next to you), then the busiest gardens.
+        .sort((a, b) => Number(close.has(b.userId)) - Number(close.has(a.userId)) || b.posts.length - a.posts.length || a.userId.localeCompare(b.userId)),
+    [world, myId, close]
   );
 
   if (isPending || (myId && (myPosts === undefined || mine === undefined)) || world === undefined) return <HomeGardenSkeleton />;

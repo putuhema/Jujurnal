@@ -7,7 +7,10 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
 import { getCalendarDate } from "@/lib/calendar-date";
-import { PlantReaction, moodLabels } from "./garden-flower";
+import { moodLabels } from "./garden-flower";
+import { DropIcon } from "@phosphor-icons/react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { Badge } from "./ui/badge";
 import { Skeleton } from "./ui/skeleton";
 import type { WorldPost } from "./world-garden-scene";
@@ -24,7 +27,7 @@ export const JournalPanel = ({
   index,
   total,
   owner,
-  canWater,
+  onWater,
   live = true,
   onPrevious,
   onNext,
@@ -36,7 +39,8 @@ export const JournalPanel = ({
   total: number;
   // Shown when reading someone else's garden.
   owner?: string;
-  canWater: boolean;
+  // Plays the watering can in the garden; left out where watering isn't possible.
+  onWater?: () => void;
   // Sample gardens don't talk to the server.
   live?: boolean;
   onPrevious: () => void;
@@ -150,7 +154,7 @@ export const JournalPanel = ({
           {formatDistanceToNow(new Date(post._creationTime), { addSuffix: true })}
         </span>
         <div className="flex items-center gap-1">
-          {canWater ? <PlantReaction postId={post._id as Id<"posts">} isOpen /> : null}
+          {onWater ? <WaterButton postId={post._id as Id<"posts">} onWater={onWater} /> : null}
           <button
             type="button"
             onClick={onPrevious}
@@ -175,5 +179,33 @@ export const JournalPanel = ({
         </div>
       </footer>
     </section>
+  );
+};
+
+// Water from the panel. Your own plant: once a day, and it helps it grow.
+// Someone else's: once, and it shows how many have watered it.
+const WaterButton = ({ postId, onWater }: { postId: Id<"posts">; onWater: () => void }) => {
+  const reaction = useQuery(api.reactions.getForPost, { postId });
+  if (!reaction || (!reaction.isOwner && !reaction.canReact && reaction.unavailableReason !== "signedOut")) return null;
+  const done = reaction.isOwner ? reaction.selfWateredOn === format(new Date(), "yyyy-MM-dd") : reaction.viewerReacted;
+  const label = reaction.isOwner ? (done ? "Watered today" : "Water") : null;
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!done) return onWater();
+        toast(reaction.isOwner ? "You've watered this one today. It'll be thirsty again tomorrow." : "You've already watered this one.");
+      }}
+      aria-pressed={done}
+      aria-label={reaction.isOwner ? (done ? "Watered today" : "Water your plant") : done ? "Watered" : "Water this plant"}
+      title={reaction.isOwner ? "Water it once a day to help it grow" : undefined}
+      className={cn(
+        "flex h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm font-medium text-sky-700 transition-transform duration-150 ease-out active:scale-[0.95] sm:h-8 dark:text-sky-300",
+        done ? "bg-sky-100 dark:bg-sky-950" : "hover:bg-sky-50 dark:hover:bg-sky-950/60",
+      )}
+    >
+      <DropIcon weight={done ? "fill" : "bold"} className="size-4" />
+      {label ?? <span className="tabular-nums">{reaction.count}</span>}
+    </button>
   );
 };

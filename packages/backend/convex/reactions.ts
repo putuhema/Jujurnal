@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { authComponent } from "./auth";
 import { mutation, query } from "./_generated/server";
+import { getDateString } from "./helpers";
 
 export const getForPost = query({
   args: { postId: v.id("posts") },
@@ -26,6 +27,10 @@ export const getForPost = query({
     return {
       count: reactions.length,
       viewerReacted,
+      isOwner,
+      // You can water your own plant once a day; it helps it grow.
+      selfWaterings: post.selfWaterings ?? 0,
+      selfWateredOn: isOwner ? post.selfWateredOn : undefined,
       canReact: Boolean(currentUser) && !isOwner && post.visibility !== "private",
       unavailableReason: post.visibility === "private"
         ? ("private" as const)
@@ -80,5 +85,20 @@ export const toggle = mutation({
     });
     await ctx.db.patch(args.postId, { reactionCount: count + 1 });
     return { watered: true };
+  },
+});
+
+// Water your own plant: once a day per plant. Each watering helps it grow.
+export const waterOwn = mutation({
+  args: { postId: v.id("posts"), timeZone: v.string() },
+  handler: async (ctx, args) => {
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
+    if (!currentUser) return { status: "signedOut" as const };
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.userId !== currentUser._id) return { status: "unavailable" as const };
+    const today = getDateString(Date.now(), args.timeZone);
+    if (post.selfWateredOn === today) return { status: "already" as const };
+    await ctx.db.patch(args.postId, { selfWaterings: (post.selfWaterings ?? 0) + 1, selfWateredOn: today });
+    return { status: "watered" as const };
   },
 });

@@ -17,6 +17,7 @@ import type * as healthCheck from "../healthCheck.js";
 import type * as helpers from "../helpers.js";
 import type * as http from "../http.js";
 import type * as mood from "../mood.js";
+import type * as neighbours from "../neighbours.js";
 import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
 import type * as reactions from "../reactions.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   helpers: typeof helpers;
   http: typeof http;
   mood: typeof mood;
+  neighbours: typeof neighbours;
   posts: typeof posts;
   preferences: typeof preferences;
   reactions: typeof reactions;

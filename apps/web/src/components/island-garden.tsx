@@ -14,6 +14,8 @@ export type IslandPost = {
   mood: MoodGrade;
   visibility?: "public" | "private";
   reactionCount?: number;
+  // Times its author watered it (helps it grow).
+  selfWaterings?: number;
 };
 
 // three.js only loads once a garden is on screen.

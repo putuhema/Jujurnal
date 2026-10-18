@@ -16,7 +16,10 @@ import { Sprout } from "lucide-react";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
 import { playGardenSound, prepareGardenAudio } from "@/lib/garden-sounds";
 import type { MoodGrade } from "@/lib/garden-procedural";
-import { MoodPicker } from "./mood-picker";
+import { MoodRow } from "./mood-picker";
+import { cn } from "@/lib/utils";
+
+const MAX_LENGTH = 280;
 
 type EntryAvailability = {
   today: string;
@@ -53,16 +56,12 @@ export const PostForm = ({
     },
     validators: {
       onSubmit: z.object({
-        post: z.string().min(12).max(280),
+        post: z.string().min(12).max(MAX_LENGTH),
       }),
     },
     onSubmit: async ({ value }) => {
       if (!entryDate) {
         setError("Choose an available journal date");
-        return;
-      }
-      if (!mood) {
-        setError("Pick the weather that feels like today");
         return;
       }
       setError(null);
@@ -73,7 +72,8 @@ export const PostForm = ({
           timeZone,
           entryDate,
           visibility,
-          mood,
+          // Skipping the mood plants a calm, steady plant.
+          mood: mood ?? "C",
         });
         playGardenSound("plant");
         form.reset();
@@ -105,68 +105,10 @@ export const PostForm = ({
         }}
       >
         <FieldGroup>
-          <div className="grid grid-cols-2 gap-2" aria-label="Journal date">
-            <Button
-              type="button"
-              variant={entryDate === availability?.today ? "default" : "outline"}
-              disabled={!availability?.canPostToday || isSubmitting}
-              onClick={() => setEntryDate(availability?.today ?? null)}
-              className="rounded-full"
-            >
-              Today
-            </Button>
-            <Button
-              type="button"
-              variant={entryDate === availability?.yesterday ? "default" : "outline"}
-              disabled={!availability?.canPostYesterday || isSubmitting}
-              onClick={() => setEntryDate(availability?.yesterday ?? null)}
-              className="rounded-full"
-            >
-              Yesterday
-            </Button>
-          </div>
-          <MoodPicker
-            value={mood}
-            onChange={(grade) => {
-              setMood(grade);
-              setError(null);
-            }}
-            disabled={isDisabled}
-          />
-          <div
-            className="grid grid-cols-2 gap-2"
-            role="group"
-            aria-label="Journal visibility"
-          >
-            <Button
-              type="button"
-              variant={visibility === "public" ? "default" : "outline"}
-              disabled={isSubmitting}
-              onClick={() => setVisibility("public")}
-              className="rounded-full"
-              aria-pressed={visibility === "public"}
-            >
-              <GlobeHemisphereWestIcon weight="bold" />
-              Public
-            </Button>
-            <Button
-              type="button"
-              variant={visibility === "private" ? "default" : "outline"}
-              disabled={isSubmitting}
-              onClick={() => setVisibility("private")}
-              className="rounded-full"
-              aria-pressed={visibility === "private"}
-            >
-              <LockKeyIcon weight="bold" />
-              Private
-            </Button>
-          </div>
+          {/* Writing comes first; everything else is optional or already chosen. */}
           <form.Field name="post">
             {(field) => {
-              const isInvalid =
-                field.state.meta.isTouched && !field.state.meta.isValid;
-              const charCount = field.state.value.length;
-              const maxLength = 280;
+              const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
               return (
                 <Field data-invalid={isInvalid}>
                   <Textarea
@@ -176,45 +118,84 @@ export const PostForm = ({
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     aria-invalid={isInvalid}
-                    placeholder={
-                      !entryDate
-                        ? "There is already a journal for both days"
-                        : `Anything on your mind?`
-                    }
+                    aria-label="Your journal"
+                    placeholder={!entryDate ? "There is already a journal for both days" : "Anything on your mind?"}
                     autoComplete="off"
-                    maxLength={maxLength}
+                    autoFocus
+                    maxLength={MAX_LENGTH}
                     disabled={isDisabled}
+                    className="min-h-36 text-base"
                   />
-                  <div className="flex items-center justify-between gap-2 mt-2">
-                    <div className="flex items-center gap-2 ml-auto">
-                      <div className="text-muted-foreground text-right text-xs mt-1">
-                        {charCount}/{maxLength}
-                      </div>
-                      <Button
-                        type="submit"
-                        className="min-w-[110px] rounded-full"
-                        disabled={isDisabled || isSubmitting}
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Spinner className="size-4 mr-2" />
-                            <span>
-                              Planting...
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Sprout className="size-4 mr-2" />
-                            <span>Grow entry</span>
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                  <p className="mt-1 text-right text-xs text-muted-foreground tabular-nums">
+                    {field.state.value.length}/{MAX_LENGTH}
+                  </p>
                 </Field>
               );
             }}
           </form.Field>
+
+          <MoodRow
+            value={mood}
+            onChange={(grade) => {
+              setMood(grade);
+              setError(null);
+            }}
+            disabled={isDisabled}
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Which day: only a choice when yesterday is still open. */}
+            {availability.canPostToday && availability.canPostYesterday ? (
+              <div role="radiogroup" aria-label="Journal date" className="flex rounded-full border border-border/70 bg-background/50 p-0.5">
+                {[
+                  { label: "Today", date: availability.today },
+                  { label: "Yesterday", date: availability.yesterday },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={entryDate === option.date}
+                    disabled={isSubmitting}
+                    onClick={() => setEntryDate(option.date)}
+                    className={cn(
+                      "h-9 cursor-pointer rounded-full px-3 text-sm font-medium transition-colors duration-150",
+                      entryDate === option.date ? "bg-primary text-primary-foreground" : "text-foreground/70 hover:text-foreground"
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : entryDate ? (
+              <span className="px-1 text-sm text-muted-foreground">{entryDate === availability.today ? "Today" : "Yesterday"}</span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setVisibility(visibility === "public" ? "private" : "public")}
+              disabled={isSubmitting}
+              aria-pressed={visibility === "private"}
+              aria-label={visibility === "private" ? "Private: only you can read it. Tap to make it public." : "Public: visitors can read it. Tap to make it private."}
+              title={visibility === "private" ? "Only you can read it" : "Visitors to your garden can read it"}
+              className="flex h-10 cursor-pointer items-center gap-1.5 rounded-full border border-border/70 bg-background/50 px-3 text-sm font-medium text-foreground/80 transition-colors duration-150 hover:bg-muted"
+            >
+              {visibility === "private" ? <LockKeyIcon weight="bold" /> : <GlobeHemisphereWestIcon weight="bold" />}
+              {visibility === "private" ? "Private" : "Public"}
+            </button>
+            <Button type="submit" className="ml-auto h-10 min-w-[110px] rounded-full" disabled={isDisabled || isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Spinner className="size-4 mr-2" />
+                  <span>Planting...</span>
+                </>
+              ) : (
+                <>
+                  <Sprout className="size-4 mr-2" />
+                  <span>Grow entry</span>
+                </>
+              )}
+            </Button>
+          </div>
         </FieldGroup>
       </form>
     </>

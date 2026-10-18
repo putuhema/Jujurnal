@@ -106,6 +106,8 @@ export const GardenPlant = ({
   const progress = useRef(animate ? 0 : 1);
   // Starts at 0 so a plant mounted with a pulse (a fresh watering) plays it straight away.
   const lastPulse = useRef(0);
+  // Eases to a new size (after a watering) instead of jumping.
+  const shownGrowth = useRef(growth);
   const { material, depthMaterial, uniforms } = useMemo(
     () => createPlantMaterial({ height: model.height, phase: model.swayPhase, vitality: model.vitality }),
     [model]
@@ -143,7 +145,8 @@ export const GardenPlant = ({
     uniforms.uReveal.value = eased;
     uniforms.uHover.value += ((isActive ? 1 : 0) - uniforms.uHover.value) * Math.min(1, delta * 10);
     plant.visible = progress.current > 0;
-    plant.scale.setScalar(growth * (0.88 + 0.12 * eased) * (1 + uniforms.uHover.value * 0.06));
+    shownGrowth.current += (growth - shownGrowth.current) * Math.min(1, delta * 1.6);
+    plant.scale.setScalar(shownGrowth.current * (0.88 + 0.12 * eased) * (1 + uniforms.uHover.value * 0.06));
     plant.rotation.z = model.lean + Math.sin(time * model.swaySpeed * 0.6 + model.swayPhase) * 0.015;
   });
 
