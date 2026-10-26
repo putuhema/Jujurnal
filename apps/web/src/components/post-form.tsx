@@ -72,8 +72,8 @@ export const PostForm = ({
           timeZone,
           entryDate,
           visibility,
-          // Skipping the mood plants a calm, steady plant.
-          mood: mood ?? "C",
+          // Skipping the mood lets the AI read it from the entry.
+          mood: mood ?? undefined,
         });
         playGardenSound("plant");
         form.reset();
@@ -186,7 +186,7 @@ export const PostForm = ({
               {isSubmitting ? (
                 <>
                   <Spinner className="size-4 mr-2" />
-                  <span>Planting...</span>
+                  <span>{mood ? "Planting..." : "Reading..."}</span>
                 </>
               ) : (
                 <>

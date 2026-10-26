@@ -13,8 +13,10 @@ import { authComponent } from "./auth";
 import { getUsersById, publicUser } from "./users";
 import { paginationOptsValidator } from "convex/server";
 import { getDateString, getDateStringForDay } from "./helpers";
+import { FALLBACK_MOOD, readMoodWithGlm } from "./moodAi";
 
-// The writer picks their own mood; it colours the flower their journal grows.
+// The mood colours the flower a journal grows. The writer can pick it;
+// otherwise the AI reads it from their words.
 const moodValidator = v.union(
   v.literal("A+"),
   v.literal("A"),
@@ -457,7 +459,8 @@ export const create = action({
     timeZone: v.string(),
     entryDate: v.string(),
     visibility: v.union(v.literal("public"), v.literal("private")),
-    mood: moodValidator,
+    // Left out to let the AI read the mood from the entry.
+    mood: v.optional(moodValidator),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -496,6 +499,7 @@ export const create = action({
       throw new Error("A journal already exists for that day");
     }
     const flowerId = Math.floor(Math.random() * FLOWER_COUNT) + 1;
+    const aiMood = args.mood ? null : await readMoodWithGlm(text);
 
     await ctx.runMutation(internal.posts.createInternal, {
       text,
@@ -506,8 +510,10 @@ export const create = action({
       year,
       flowerId,
       visibility: args.visibility,
-      mood: args.mood,
+      mood: args.mood ?? aiMood?.grade ?? FALLBACK_MOOD,
+      moodReason: aiMood?.reason,
     });
+    return { mood: args.mood ?? aiMood?.grade ?? FALLBACK_MOOD, moodByAi: Boolean(aiMood) };
   },
 });
 

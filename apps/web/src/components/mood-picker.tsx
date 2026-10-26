@@ -98,6 +98,6 @@ export const MoodRow = ({
         );
       })}
     </div>
-    {!value ? <p className="mt-1.5 px-1 text-xs text-muted-foreground">Not sure? Skip it, and it grows as a calm, steady plant.</p> : null}
+    {!value ? <p className="mt-1.5 px-1 text-xs text-muted-foreground">Not sure? Skip it, and we’ll read the weather from your words.</p> : null}
   </div>
 );
