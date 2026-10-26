@@ -3,7 +3,7 @@ import { internalAction } from "./_generated/server";
 import type { MoodGrade } from "./types";
 
 // Reads a journal entry with a GLM model (Zhipu AI) and picks its weather.
-// Only the six grades the mood picker offers are used, so AI moods match hand-picked ones.
+// Only six grades are used, matching the six weather labels the garden shows.
 const AI_GRADES = ["A+", "A", "B", "C", "D", "F"] as const satisfies readonly MoodGrade[];
 
 // Used when the AI is unavailable or unsure: a calm, steady plant.

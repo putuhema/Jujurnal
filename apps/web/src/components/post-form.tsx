@@ -15,8 +15,6 @@ import { GlobeHemisphereWestIcon, LockKeyIcon } from "@phosphor-icons/react";
 import { Sprout } from "lucide-react";
 import { getBrowserTimeZone } from "@/lib/calendar-date";
 import { playGardenSound, prepareGardenAudio } from "@/lib/garden-sounds";
-import type { MoodGrade } from "@/lib/garden-procedural";
-import { MoodRow } from "./mood-picker";
 import { cn } from "@/lib/utils";
 
 const MAX_LENGTH = 280;
@@ -41,7 +39,6 @@ export const PostForm = ({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [visibility, setVisibility] = useState<"public" | "private">("public");
-  const [mood, setMood] = useState<MoodGrade | null>(null);
   const [entryDate, setEntryDate] = useState<string | null>(() =>
     availability.canPostToday
       ? availability.today
@@ -72,12 +69,9 @@ export const PostForm = ({
           timeZone,
           entryDate,
           visibility,
-          // Skipping the mood lets the AI read it from the entry.
-          mood: mood ?? undefined,
         });
         playGardenSound("plant");
         form.reset();
-        setMood(null);
         onPlanted?.();
       } catch (err: any) {
         setError(err.message || "Failed to create post");
@@ -105,7 +99,7 @@ export const PostForm = ({
         }}
       >
         <FieldGroup>
-          {/* Writing comes first; everything else is optional or already chosen. */}
+          {/* Writing comes first; the mood is read from the words. */}
           <form.Field name="post">
             {(field) => {
               const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
@@ -133,15 +127,6 @@ export const PostForm = ({
               );
             }}
           </form.Field>
-
-          <MoodRow
-            value={mood}
-            onChange={(grade) => {
-              setMood(grade);
-              setError(null);
-            }}
-            disabled={isDisabled}
-          />
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Which day: only a choice when yesterday is still open. */}
@@ -186,7 +171,7 @@ export const PostForm = ({
               {isSubmitting ? (
                 <>
                   <Spinner className="size-4 mr-2" />
-                  <span>{mood ? "Planting..." : "Reading..."}</span>
+                  <span>Planting...</span>
                 </>
               ) : (
                 <>

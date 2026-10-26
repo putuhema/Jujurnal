@@ -15,8 +15,7 @@ import { paginationOptsValidator } from "convex/server";
 import { getDateString, getDateStringForDay } from "./helpers";
 import { FALLBACK_MOOD, readMoodWithGlm } from "./moodAi";
 
-// The mood colours the flower a journal grows. The writer can pick it;
-// otherwise the AI reads it from their words.
+// The mood colours the flower a journal grows. The AI reads it from the writer's words.
 const moodValidator = v.union(
   v.literal("A+"),
   v.literal("A"),
@@ -459,8 +458,6 @@ export const create = action({
     timeZone: v.string(),
     entryDate: v.string(),
     visibility: v.union(v.literal("public"), v.literal("private")),
-    // Left out to let the AI read the mood from the entry.
-    mood: v.optional(moodValidator),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -499,7 +496,7 @@ export const create = action({
       throw new Error("A journal already exists for that day");
     }
     const flowerId = Math.floor(Math.random() * FLOWER_COUNT) + 1;
-    const aiMood = args.mood ? null : await readMoodWithGlm(text);
+    const aiMood = await readMoodWithGlm(text);
 
     await ctx.runMutation(internal.posts.createInternal, {
       text,
@@ -510,10 +507,10 @@ export const create = action({
       year,
       flowerId,
       visibility: args.visibility,
-      mood: args.mood ?? aiMood?.grade ?? FALLBACK_MOOD,
+      mood: aiMood?.grade ?? FALLBACK_MOOD,
       moodReason: aiMood?.reason,
     });
-    return { mood: args.mood ?? aiMood?.grade ?? FALLBACK_MOOD, moodByAi: Boolean(aiMood) };
+    return { mood: aiMood?.grade ?? FALLBACK_MOOD };
   },
 });
 
@@ -546,6 +543,7 @@ export const updatePostInternal = internalMutation({
     userId: v.string(),
     visibility: v.union(v.literal("public"), v.literal("private")),
     mood: v.optional(moodValidator),
+    moodReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const post = await ctx.db.get(args.id);
@@ -557,7 +555,7 @@ export const updatePostInternal = internalMutation({
     await ctx.db.patch(args.id, {
       body: args.body,
       visibility: args.visibility,
-      ...(args.mood ? { mood: args.mood } : {}),
+      ...(args.mood ? { mood: args.mood, moodReason: args.moodReason } : {}),
     });
 
     if (args.visibility === "private") {
@@ -592,8 +590,6 @@ export const updatePost = action({
     id: v.id("posts"),
     body: v.string(),
     visibility: v.union(v.literal("public"), v.literal("private")),
-    // Left out to keep the entry's current mood.
-    mood: v.optional(moodValidator),
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
@@ -612,12 +608,16 @@ export const updatePost = action({
       throw new Error("You can only edit your own entries");
     }
 
+    // New words get a fresh reading; if the AI can't answer, the old mood stays.
+    const aiMood = body !== post.body ? await readMoodWithGlm(body) : null;
+
     await ctx.runMutation(internal.posts.updatePostInternal, {
       id: args.id,
       body,
       userId: currentUser._id,
       visibility: args.visibility,
-      mood: args.mood,
+      mood: aiMood?.grade,
+      moodReason: aiMood?.reason,
     });
   },
 });

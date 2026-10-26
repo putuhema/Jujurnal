@@ -37,7 +37,6 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { MoodPicker } from "@/components/mood-picker";
 
 type MoodGrade =
   | "A+"
@@ -106,7 +105,6 @@ export default function UserPost() {
   const [editingPost, setEditingPost] = useState<any>(null);
   const [editedBody, setEditedBody] = useState("");
   const [editedVisibility, setEditedVisibility] = useState<"public" | "private">("public");
-  const [editedMood, setEditedMood] = useState<MoodGrade | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const filteredPosts = posts;
 
@@ -114,7 +112,6 @@ export default function UserPost() {
     setEditingPost(post);
     setEditedBody(post.body);
     setEditedVisibility(post.visibility ?? "public");
-    setEditedMood(post.mood ?? null);
   };
 
   const saveEdit = async () => {
@@ -125,8 +122,6 @@ export default function UserPost() {
         id: editingPost._id,
         body: editedBody,
         visibility: editedVisibility,
-        // Only sent when changed, so older in-between grades are kept as they were.
-        mood: editedMood && editedMood !== editingPost.mood ? editedMood : undefined,
       });
       setEditingPost(null);
       toast.success("Entry updated");
@@ -263,7 +258,7 @@ export default function UserPost() {
         <DialogContent>
           <DialogHeader className="px-6 pt-6">
             <DialogTitle className="font-display text-3xl tracking-[-0.035em]">Refine your words</DialogTitle>
-            <DialogDescription>Your day and flower stay as they are. Change the weather if the day feels different now.</DialogDescription>
+            <DialogDescription>Your day and flower stay as they are. If you change the words, the weather is read again.</DialogDescription>
           </DialogHeader>
           <form
             className="space-y-3 px-6 pb-6"
@@ -272,7 +267,6 @@ export default function UserPost() {
               void saveEdit();
             }}
           >
-            <MoodPicker value={editedMood} onChange={setEditedMood} disabled={isSaving} />
             <div
               className="grid grid-cols-2 gap-2"
               role="group"
