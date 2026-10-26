@@ -15,12 +15,18 @@ import { Skeleton } from "./ui/skeleton";
 // reached for, not with every page.
 const loadForm = () => import("./post-form");
 const PostForm = dynamic(() => loadForm().then((module) => module.PostForm), {
+  // Shaped like the form: the text box and its counter, then date, visibility and "Grow entry".
   loading: () => (
-    <div aria-hidden="true" className="space-y-3 pt-1">
-      <Skeleton className="h-9 w-full rounded-full" />
-      <Skeleton className="h-36 w-full rounded-2xl" />
-      <Skeleton className="h-9 w-full rounded-full" />
-      <Skeleton className="h-24 w-full rounded-xl" />
+    <div aria-hidden="true" className="flex flex-col gap-7">
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-36 w-full rounded-xl" />
+        <Skeleton className="mt-1 ml-auto h-3 w-12 rounded-full" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-10 w-40 rounded-full" />
+        <Skeleton className="h-10 w-24 rounded-full" />
+        <Skeleton className="ml-auto h-10 w-[110px] rounded-full" />
+      </div>
     </div>
   ),
 });
