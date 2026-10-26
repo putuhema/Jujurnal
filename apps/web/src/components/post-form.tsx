@@ -6,7 +6,7 @@ import { Field, FieldGroup } from "@/components/ui/field";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 
-import { useAction } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useState } from "react";
@@ -35,7 +35,7 @@ export const PostForm = ({
   onPlanted?: () => void;
 }) => {
   const timeZone = getBrowserTimeZone();
-  const createPost = useAction(api.posts.create);
+  const createPost = useMutation(api.posts.create);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [visibility, setVisibility] = useState<"public" | "private">("public");

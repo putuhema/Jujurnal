@@ -6,7 +6,6 @@ import { RotateCcw, RotateCw } from "lucide-react";
 import * as THREE from "three";
 import {
   createGardenCamera,
-  createGardenLayout,
   createPlant,
   getGardenPivot,
   getGrowthStage,
@@ -21,6 +20,12 @@ import { NewBeam } from "./garden-highlights";
 import { GardenFlower } from "./garden-flower";
 import { useGardenZoom } from "./garden-zoom";
 import type { IslandPost } from "./island-garden";
+import { createPieceLayout } from "@/lib/garden-world";
+import { arrangePlots, cellAt, type Arrangement } from "@/lib/garden-arrangement";
+import { Decoration } from "./garden-objects";
+
+// Your own island sits at the centre of the world, which arrangements are measured from.
+const HOME_CENTER = { x: 0, z: 0 };
 
 const FRAME_ASPECT = 3 / 2;
 // A drag across the full width of the frame turns the garden by this much.
@@ -32,9 +37,12 @@ const BUTTON_TURN = Math.PI / 4;
 export default function GardenIslandScene({
   posts,
   seed,
+  arrangement,
 }: {
   posts: IslandPost[];
   seed: string;
+  // How the gardener arranged their garden on the home screen.
+  arrangement?: Arrangement;
 }) {
   const { zoomMode } = useGardenZoom();
   const frameRef = useRef<HTMLDivElement>(null);
@@ -55,7 +63,13 @@ export default function GardenIslandScene({
   const newestPostId = sortedPosts.at(-1)?._id;
   const plantKey = sortedPosts.map((post) => `${post._id}:${post.mood}:${post.reactionCount ?? 0}`).join("|");
 
-  const layout = useMemo(() => createGardenLayout(seed, sortedPosts.length), [seed, sortedPosts.length]);
+  // The same island and plant spots as the garden on the home screen.
+  const baseLayout = useMemo(() => createPieceLayout(seed, 0, 0, sortedPosts.length), [seed, sortedPosts.length]);
+  const postIdsKey = sortedPosts.map((post) => post._id).join("|");
+  const layout = useMemo(
+    () => ({ ...baseLayout, plots: arrangePlots(baseLayout, postIdsKey ? postIdsKey.split("|") : [], arrangement, HOME_CENTER) }),
+    [baseLayout, postIdsKey, arrangement]
+  );
   // plantKey captures every input to the plant models.
   const plants = useMemo(() => sortedPosts.map((post) => createPlant(post._id, { mood: post.mood, waterings: post.reactionCount, plantedAt: post._creationTime, stage: getGrowthStage(post._creationTime, now, totalWaterings(post)) })), [plantKey]);
   const camera = useMemo(() => {
@@ -66,10 +80,10 @@ export default function GardenIslandScene({
   }, [layout]);
 
   useEffect(() => () => {
-    layout.island.dispose();
-    layout.water?.dispose();
-    layout.decor?.dispose();
-  }, [layout]);
+    baseLayout.island.dispose();
+    baseLayout.water?.dispose();
+    baseLayout.decor?.dispose();
+  }, [baseLayout]);
   useEffect(() => () => {
     for (const plant of plants) plant.geometry.dispose();
   }, [plants]);
@@ -198,6 +212,12 @@ export default function GardenIslandScene({
                   animate={!prefersReducedMotion}
                 />
               );
+            })}
+            {(arrangement?.decorations ?? []).map((decoration) => {
+              const cell = cellAt(layout, HOME_CENTER.x + decoration.x, HOME_CENTER.z + decoration.z);
+              return cell && cell.kind === "grass" ? (
+                <Decoration key={decoration.id} kind={decoration.kind} spot={{ x: cell.x, y: cell.top, z: cell.z }} turn={decoration.turn} night={false} />
+              ) : null;
             })}
             {/* A journal from the last day still glows with its beam of light. */}
             {newestPostId && now - (sortedPosts.at(-1)?._creationTime ?? 0) < 86_400_000 && layout.plots[sortedPosts.length - 1] ? (

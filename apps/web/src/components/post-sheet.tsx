@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { PlantIcon, SparkleIcon } from "@phosphor-icons/react";
 import { useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
@@ -47,6 +47,11 @@ export const PostSheet = ({
   const timeZone = getBrowserTimeZone();
   const availability = useQuery(api.posts.getEntryAvailability, { timeZone });
   const [open, setOpen] = useState(false);
+  // Fetch the form once the page has settled, so the sheet opens straight to it.
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((callback: () => void) => window.setTimeout(callback, 1500));
+    idle(() => void loadForm());
+  }, []);
   const isWide = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(wideQuery).matches, () => false);
   const floatingClass = floating && "fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-40 h-11 -translate-x-1/2 px-5 shadow-[0_12px_28px_oklch(0.24_0.04_70/25%)] sm:static sm:h-8 sm:translate-x-0 sm:px-3 sm:shadow-none";
   const hasNoAvailableDate =
@@ -116,7 +121,7 @@ export const PostSheet = ({
           <SheetTitle className="font-display text-2xl tracking-[-0.035em]">Plant a journal</SheetTitle>
           <SheetDescription>There’s no right way to begin. Just be honest.</SheetDescription>
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-1 pb-6">
           {availability ? (
             <PostForm
               key={`${availability.today}-${availability.canPostToday}-${availability.canPostYesterday}`}

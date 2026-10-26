@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronLeft, ChevronRight, Eye, LockKeyhole, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, LockKeyhole, Sparkles, X } from "lucide-react";
 import { format } from "date-fns";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
@@ -50,6 +50,8 @@ export const JournalPanel = ({
   const isPrivate = post.visibility === "private";
   const fetched = useQuery(api.posts.getById, post.body === undefined ? { id: post._id as Id<"posts"> } : "skip");
   const body = post.body ?? fetched?.body;
+  // The AI's note on the mood; only the writer is ever sent it.
+  const moodReason = post.moodReason ?? (fetched as { moodReason?: string } | null | undefined)?.moodReason;
   const date = getCalendarDate(post._creationTime, post.entryDate).date;
   const swipe = useRef<{ pointerId: number; x: number; y: number; at: number } | null>(null);
   const [drag, setDrag] = useState({ x: 0, y: 0 });
@@ -111,7 +113,7 @@ export const JournalPanel = ({
               {owner ? `${owner}'s journal` : "Your journal"} · {format(new Date(`${date}T12:00:00`), "EEE, MMM d")}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <Badge variant="outline" className="rounded-full">{moodLabels[post.mood]}</Badge>
+              <Badge variant="outline" className="rounded-full">{post.moodPending ? "Reading…" : moodLabels[post.mood]}</Badge>
               {isPrivate ? (
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <LockKeyhole className="size-3" aria-hidden="true" /> Private
@@ -137,7 +139,15 @@ export const JournalPanel = ({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:p-5">
         {body !== undefined ? (
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed [overflow-wrap:anywhere]">{body}</p>
+          <>
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed [overflow-wrap:anywhere]">{body}</p>
+            {!owner && (post.moodPending || moodReason) ? (
+              <p className="mt-4 flex items-start gap-2 rounded-2xl bg-muted/60 px-3 py-2.5 text-[13px] leading-snug text-muted-foreground">
+                <Sparkles className={cn("mt-0.5 size-3.5 shrink-0 text-primary", post.moodPending && "motion-safe:animate-pulse")} aria-hidden="true" />
+                <span>{post.moodPending ? "The garden is reading your words…" : moodReason}</span>
+              </p>
+            ) : null}
+          </>
         ) : fetched === null ? (
           <p className="text-sm text-muted-foreground">This journal is no longer here.</p>
         ) : (

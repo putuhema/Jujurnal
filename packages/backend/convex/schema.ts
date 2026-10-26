@@ -31,6 +31,8 @@ export default defineSchema({
       v.literal("F")
     ),
     moodReason: v.optional(v.string()),
+    // True while the AI is still reading the mood of a new or rewritten journal.
+    moodPending: v.optional(v.boolean()),
     flowerId: v.optional(v.number()),
     entryDate: v.optional(v.string()),
     visibility: v.optional(

@@ -2,9 +2,8 @@ import { v } from "convex/values";
 import {
   query,
   mutation,
-  action,
+  internalAction,
   internalMutation,
-  internalQuery,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
@@ -42,6 +41,13 @@ const countReactions = async (ctx: QueryCtx, post: Doc<"posts">) =>
       .withIndex("by_postId", (q) => q.eq("postId", post._id))
       .collect()
   ).length;
+
+// The AI's note on a journal is written to its author, so only they get it.
+const forViewer = <T extends { userId: string; moodReason?: string }>(post: T, viewerId: string | undefined) => {
+  if (post.userId === viewerId) return post;
+  const { moodReason: _hidden, ...rest } = post;
+  return rest;
+};
 
 const monthRange = (month: string) => {
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error("month must look like 2026-10");
@@ -126,7 +132,7 @@ export const getUserMonth = query({
     return await Promise.all(
       posts
         .filter((post) => isOwner || post.visibility !== "private")
-        .map(async (post) => ({ ...post, reactionCount: await countReactions(ctx, post) }))
+        .map(async (post) => ({ ...forViewer(post, currentUser?._id), reactionCount: await countReactions(ctx, post) }))
     );
   },
 });
@@ -164,7 +170,7 @@ export const getAll = query({
           countReactions(ctx, post),
         ]);
         return {
-          ...post,
+          ...forViewer(post, currentUser?._id),
           user: publicUser(users.get(post.userId)),
           gardenTheme: preference?.theme ?? "ivory",
           reactionCount,
@@ -186,12 +192,10 @@ export const getById = query({
     if (!post) {
       return null;
     }
-    if (post.visibility === "private") {
-      const currentUser = await authComponent.safeGetAuthUser(ctx);
-      if (post.userId !== currentUser?._id) return null;
-    }
+    const currentUser = await authComponent.safeGetAuthUser(ctx);
+    if (post.visibility === "private" && post.userId !== currentUser?._id) return null;
     const user = await authComponent.getAnyUserById(ctx, post.userId);
-    return { ...post, user: publicUser(user) };
+    return { ...forViewer(post, currentUser?._id), user: publicUser(user) };
   },
 });
 
@@ -199,7 +203,7 @@ export const getUserYear = query({
   args: { userId: v.string(), year: v.number() },
   handler: async (ctx, args) => {
     const byDate = () => ctx.db.query("posts").withIndex("by_authorId_entryDate", (q) => q.eq("userId", args.userId));
-    const [currentUser, dated, undated, first] = await Promise.all([
+    const [currentUser, dated, undated, first, layout] = await Promise.all([
       authComponent.safeGetAuthUser(ctx),
       ctx.db
         .query("posts")
@@ -213,6 +217,8 @@ export const getUserYear = query({
         .withIndex("by_authorId_entryDate", (q) => q.eq("userId", args.userId).eq("entryDate", undefined))
         .collect(),
       byDate().order("asc").filter((q) => q.neq(q.field("entryDate"), undefined)).first(),
+      // How they've arranged their garden, so the island here matches the one on the home screen.
+      ctx.db.query("gardenLayouts").withIndex("by_userId", (q) => q.eq("userId", args.userId)).unique(),
     ]);
     const isOwner = currentUser?._id === args.userId;
     const firstYears = [
@@ -225,7 +231,10 @@ export const getUserYear = query({
     ].filter((post) => isOwner || post.visibility !== "private");
     return {
       firstYear: firstYears.length ? Math.min(...firstYears) : args.year,
-      posts: await Promise.all(posts.map(async (post) => ({ ...post, reactionCount: await countReactions(ctx, post) }))),
+      arrangement: layout ? { moves: layout.moves, decorations: layout.decorations } : undefined,
+      posts: await Promise.all(
+        posts.map(async (post) => ({ ...forViewer(post, currentUser?._id), reactionCount: await countReactions(ctx, post) }))
+      ),
     };
   },
 });
@@ -262,7 +271,7 @@ export const getUserPage = query({
         page.page
           .filter((post) => isOwner || post.visibility !== "private")
           .map(async (post) => ({
-            ...post,
+            ...forViewer(post, currentUser?._id),
             user,
             reactionCount: await countReactions(ctx, post),
             // Only you see how many people read your journals.
@@ -273,145 +282,18 @@ export const getUserPage = query({
   },
 });
 
-export const getUserPostsInternal = internalQuery({
-  args: {
-    userId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const posts = await ctx.db
-      .query("posts")
-      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
-      .collect();
-    return posts.map((post) => ({
-      body: post.body,
-      mood: post.mood,
-      entryDate: post.entryDate,
-      _creationTime: post._creationTime,
-    }));
-  },
-});
-
-export const getPostInternal = internalQuery({
-  args: {
-    id: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
-  },
-});
-
-export const createInternal = internalMutation({
-  args: {
-    text: v.string(),
-    userId: v.string(),
-    nowMs: v.number(),
-    timeZone: v.string(),
-    entryDate: v.string(),
-    year: v.number(),
-    flowerId: v.number(),
-    visibility: v.union(v.literal("public"), v.literal("private")),
-    mood: moodValidator,
-    moodReason: v.optional(v.string()),
-    tagIds: v.optional(v.array(v.id("tags"))),
-  },
-  handler: async (ctx, args) => {
-    const existingPosts = await ctx.db
-      .query("posts")
-      .withIndex("by_authorId", (q) => q.eq("userId", args.userId))
-      .collect();
-    const alreadyExists = existingPosts.some(
-      (post) =>
-        (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
-        args.entryDate
-    );
-    if (alreadyExists) {
-      throw new Error("A journal already exists for that day");
-    }
-
-    const flowerId =
-      Number.isFinite(args.flowerId) && args.flowerId > 0
-        ? Math.floor(args.flowerId)
-        : 1;
-
-    await ctx.db.insert("posts", {
-      body: args.text,
-      userId: args.userId,
-      mood: args.mood,
-      moodReason: args.moodReason,
-      flowerId: ((flowerId - 1) % FLOWER_COUNT) + 1,
-      entryDate: args.entryDate,
-      year: args.year,
-      visibility: args.visibility,
-    });
-
-    const posts = [...existingPosts, {
-      entryDate: args.entryDate,
-      _creationTime: args.nowMs,
-    }];
-
-    const postsByDate = new Set<string>();
-    for (const post of posts) {
-      const dateStr =
-        post.entryDate ?? getDateString(post._creationTime, args.timeZone);
-      postsByDate.add(dateStr);
-    }
-
-    let currentStreak = 0;
-    const today = getDateString(args.nowMs, args.timeZone);
-    if (postsByDate.has(today)) {
-      currentStreak = 1;
-      let daysAgo = 1;
-      while (true) {
-        const dateStr = getDateStringForDay(args.nowMs, daysAgo, args.timeZone);
-        if (postsByDate.has(dateStr)) {
-          currentStreak++;
-          daysAgo++;
-        } else {
-          break;
-        }
-      }
-    }
-
-    let longestStreak = 1;
-    if (postsByDate.size > 0) {
-      const sortedDates = Array.from(postsByDate).sort();
-      let currentLongestStreak = 1;
-      for (let i = 1; i < sortedDates.length; i++) {
-        const prevDate = new Date(sortedDates[i - 1] + "T00:00:00Z");
-        const currDate = new Date(sortedDates[i] + "T00:00:00Z");
-        const daysDiff = Math.floor(
-          (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24)
-        );
-        if (daysDiff === 1) {
-          currentLongestStreak++;
-          longestStreak = Math.max(longestStreak, currentLongestStreak);
-        } else {
-          currentLongestStreak = 1;
-        }
-      }
-    }
-  },
-});
+const hasJournalFor = async (ctx: { db: QueryCtx["db"] }, userId: string, entryDate: string) =>
+  (await ctx.db
+    .query("posts")
+    .withIndex("by_authorId_entryDate", (q) => q.eq("userId", userId).eq("entryDate", entryDate))
+    .first()) !== null;
 
 export const hasPostedToday = query({
   args: { timeZone: v.string() },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.safeGetAuthUser(ctx);
-    if (!currentUser) {
-      return false;
-    }
-
-    const today = getDateString(Date.now(), args.timeZone);
-    const posts = await ctx.db
-      .query("posts")
-      .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
-      .collect();
-
-    return posts.some(
-      (post) =>
-        (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
-        today
-    );
+    if (!currentUser) return false;
+    return await hasJournalFor(ctx, currentUser._id, getDateString(Date.now(), args.timeZone));
   },
 });
 
@@ -422,37 +304,20 @@ export const getEntryAvailability = query({
     const nowMs = Date.now();
     const today = getDateString(nowMs, args.timeZone);
     const yesterday = getDateStringForDay(nowMs, 1, args.timeZone);
-
     if (!currentUser) {
-      return {
-        today,
-        yesterday,
-        canPostToday: false,
-        canPostYesterday: false,
-      };
+      return { today, yesterday, canPostToday: false, canPostYesterday: false };
     }
-
-    const posts = await ctx.db
-      .query("posts")
-      .withIndex("by_authorId", (q) => q.eq("userId", currentUser._id))
-      .collect();
-    const postedDates = new Set(
-      posts.map(
-        (post) =>
-          post.entryDate ?? getDateString(post._creationTime, args.timeZone)
-      )
-    );
-
-    return {
-      today,
-      yesterday,
-      canPostToday: !postedDates.has(today),
-      canPostYesterday: !postedDates.has(yesterday),
-    };
+    const [postedToday, postedYesterday] = await Promise.all([
+      hasJournalFor(ctx, currentUser._id, today),
+      hasJournalFor(ctx, currentUser._id, yesterday),
+    ]);
+    return { today, yesterday, canPostToday: !postedToday, canPostYesterday: !postedYesterday };
   },
 });
 
-export const create = action({
+// Saves the journal straight away; its mood is read by the AI just after (readMood),
+// so planting never waits on it. Until then it shows as a calm, steady plant.
+export const create = mutation({
   args: {
     text: v.string(),
     timeZone: v.string(),
@@ -461,10 +326,7 @@ export const create = action({
   },
   handler: async (ctx, args) => {
     const currentUser = await authComponent.getAuthUser(ctx);
-
-    if (!currentUser) {
-      throw new Error("Not authenticated");
-    }
+    if (!currentUser) throw new Error("Not authenticated");
 
     const nowMs = Date.now();
     const today = getDateString(nowMs, args.timeZone);
@@ -478,39 +340,54 @@ export const create = action({
       throw new Error("An entry must be between 12 and 280 characters");
     }
 
-    const year = Number(args.entryDate.slice(0, 4));
-    const existingPosts = await ctx.runQuery(
-      internal.posts.getUserPostsInternal,
-      {
-        userId: currentUser._id,
-      }
-    );
-
-    const hasPostedForDate = existingPosts.some(
-      (post) =>
-        (post.entryDate ?? getDateString(post._creationTime, args.timeZone)) ===
-        args.entryDate
-    );
-
-    if (hasPostedForDate) {
+    if (await hasJournalFor(ctx, currentUser._id, args.entryDate)) {
       throw new Error("A journal already exists for that day");
     }
-    const flowerId = Math.floor(Math.random() * FLOWER_COUNT) + 1;
-    const aiMood = await readMoodWithGlm(text);
 
-    await ctx.runMutation(internal.posts.createInternal, {
-      text,
+    const postId = await ctx.db.insert("posts", {
+      body: text,
       userId: currentUser._id,
-      nowMs,
-      timeZone: args.timeZone,
+      mood: FALLBACK_MOOD,
+      moodPending: true,
+      flowerId: Math.floor(Math.random() * FLOWER_COUNT) + 1,
       entryDate: args.entryDate,
-      year,
-      flowerId,
+      year: Number(args.entryDate.slice(0, 4)),
       visibility: args.visibility,
-      mood: aiMood?.grade ?? FALLBACK_MOOD,
-      moodReason: aiMood?.reason,
     });
-    return { mood: aiMood?.grade ?? FALLBACK_MOOD };
+    await ctx.scheduler.runAfter(0, internal.posts.readMood, { postId, body: text });
+    return { postId };
+  },
+});
+
+// Asks the AI for a journal's mood, then stores it (or just clears the wait if it can't answer).
+export const readMood = internalAction({
+  args: { postId: v.id("posts"), body: v.string() },
+  handler: async (ctx, args) => {
+    const reading = await readMoodWithGlm(args.body);
+    await ctx.runMutation(internal.posts.applyMood, {
+      postId: args.postId,
+      body: args.body,
+      mood: reading?.grade,
+      moodReason: reading?.reason,
+    });
+  },
+});
+
+export const applyMood = internalMutation({
+  args: {
+    postId: v.id("posts"),
+    body: v.string(),
+    mood: v.optional(moodValidator),
+    moodReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    // Deleted, or rewritten since this reading started (a newer reading is on its way).
+    if (!post || post.body !== args.body) return;
+    await ctx.db.patch(
+      args.postId,
+      args.mood ? { mood: args.mood, moodReason: args.moodReason, moodPending: false } : { moodPending: false }
+    );
   },
 });
 
@@ -536,39 +413,6 @@ export const deletePost = mutation({
   },
 });
 
-export const updatePostInternal = internalMutation({
-  args: {
-    id: v.id("posts"),
-    body: v.string(),
-    userId: v.string(),
-    visibility: v.union(v.literal("public"), v.literal("private")),
-    mood: v.optional(moodValidator),
-    moodReason: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.id);
-    if (!post) throw new Error("Entry not found");
-    if (post.userId !== args.userId) {
-      throw new Error("You can only edit your own entries");
-    }
-
-    await ctx.db.patch(args.id, {
-      body: args.body,
-      visibility: args.visibility,
-      ...(args.mood ? { mood: args.mood, moodReason: args.moodReason } : {}),
-    });
-
-    if (args.visibility === "private") {
-      const reactions = await ctx.db
-        .query("plantReactions")
-        .withIndex("by_postId", (q) => q.eq("postId", args.id))
-        .collect();
-      await Promise.all(reactions.map((reaction) => ctx.db.delete(reaction._id)));
-      await ctx.db.patch(args.id, { reactionCount: 0 });
-    }
-  },
-});
-
 // One-off: store reaction counts on posts written before reactionCount existed.
 // Run with `npx convex run posts:backfillReactionCounts` after deploying.
 export const backfillReactionCounts = internalMutation({
@@ -585,7 +429,9 @@ export const backfillReactionCounts = internalMutation({
   },
 });
 
-export const updatePost = action({
+// New words are saved at once and their mood read again in the background;
+// if the AI can't answer, the old mood stays.
+export const updatePost = mutation({
   args: {
     id: v.id("posts"),
     body: v.string(),
@@ -600,24 +446,29 @@ export const updatePost = action({
       throw new Error("An entry must be between 12 and 280 characters");
     }
 
-    const post = await ctx.runQuery(internal.posts.getPostInternal, {
-      id: args.id,
-    });
+    const post = await ctx.db.get(args.id);
     if (!post) throw new Error("Entry not found");
     if (post.userId !== currentUser._id) {
       throw new Error("You can only edit your own entries");
     }
 
-    // New words get a fresh reading; if the AI can't answer, the old mood stays.
-    const aiMood = body !== post.body ? await readMoodWithGlm(body) : null;
-
-    await ctx.runMutation(internal.posts.updatePostInternal, {
-      id: args.id,
+    const wordsChanged = body !== post.body;
+    await ctx.db.patch(args.id, {
       body,
-      userId: currentUser._id,
       visibility: args.visibility,
-      mood: aiMood?.grade,
-      moodReason: aiMood?.reason,
+      ...(wordsChanged ? { moodPending: true } : {}),
     });
+    if (wordsChanged) {
+      await ctx.scheduler.runAfter(0, internal.posts.readMood, { postId: args.id, body });
+    }
+
+    if (args.visibility === "private") {
+      const reactions = await ctx.db
+        .query("plantReactions")
+        .withIndex("by_postId", (q) => q.eq("postId", args.id))
+        .collect();
+      await Promise.all(reactions.map((reaction) => ctx.db.delete(reaction._id)));
+      await ctx.db.patch(args.id, { reactionCount: 0 });
+    }
   },
 });

@@ -52,6 +52,7 @@ import { getJournalAriaLabel } from "./garden-flower";
 import { JournalPanel } from "./journal-panel";
 import { playGardenSound } from "@/lib/garden-sounds";
 import { GardenPlant } from "./garden-three";
+import { GardenMoodNote } from "./garden-mood-note";
 import type { IslandPost } from "./island-garden";
 import { Slider } from "./ui/slider";
 
@@ -829,6 +830,9 @@ export default function WorldGardenScene({
     visitLayout?.decor?.dispose();
   }, [visitLayout]);
 
+  // Journals whose mood the AI has just read, waiting for their reveal (see "Mood reveal").
+  const [revealQueue, setRevealQueue] = useState<string[]>([]);
+
   // --- Planting: a journal that appears while you're here gets its moment ---
   const knownPosts = useRef<Set<string> | null>(null);
   useEffect(() => {
@@ -844,6 +848,8 @@ export default function WorldGardenScene({
     setVisit(null);
     setMode("garden");
     if (!still) setPlanting({ postId: added._id, key: Date.now() });
+    // Usually the AI is still reading; if it already has, reveal the mood once it's planted.
+    if (!added.moodPending) setRevealQueue((queue) => [...queue, added._id]);
     // Felt as the seed lands, and heard as the flower opens.
     window.setTimeout(() => buzz(20), PLANTING.seedFall * 1000);
     window.setTimeout(() => playGardenSound("bloom"), (PLANTING.growDelay + 0.3) * 1000);
@@ -1401,6 +1407,42 @@ export default function WorldGardenScene({
     setSeenNewest(focusPostId);
     window.localStorage.setItem("bloom-seen-newest", focusPostId);
   }, [focusPostId, newestPostId]);
+  // --- Mood reveal: when the AI has read a journal, its flower blooms into colour ---
+  const pendingPosts = useRef<Set<string> | null>(null);
+  const [reveal, setReveal] = useState<{ postId: string; key: number } | null>(null);
+  useEffect(() => {
+    const pending = new Set<string>(myPosts.filter((post) => post.moodPending).map((post) => post._id));
+    const previous = pendingPosts.current;
+    pendingPosts.current = pending;
+    if (!previous) return;
+    const read = [...previous].filter((id) => !pending.has(id) && myPosts.some((post) => post._id === id));
+    if (read.length) setRevealQueue((queue) => [...queue, ...read]);
+  }, [myPosts]);
+  // One at a time, and never on top of planting or an open journal.
+  useEffect(() => {
+    if (reveal || planting || isReading || revealQueue.length === 0) return;
+    const [postId, ...rest] = revealQueue;
+    setRevealQueue(rest);
+    setReveal({ postId, key: Date.now() });
+    buzz(20);
+    if (soundOn) playGardenSound("bloom");
+  }, [reveal, planting, isReading, revealQueue, soundOn]);
+  useEffect(() => {
+    if (!reveal) return;
+    const timer = window.setTimeout(() => setReveal(null), 6500);
+    return () => window.clearTimeout(timer);
+  }, [reveal]);
+  const revealIndex = reveal ? myPosts.findIndex((post) => post._id === reveal.postId) : -1;
+  const revealPost = revealIndex >= 0 ? myPosts[revealIndex] : undefined;
+  const revealPlot = revealIndex >= 0 ? myArranged?.plots[revealIndex] : undefined;
+  const revealColors = useMemo(
+    () => (revealIndex >= 0 && myPlants[revealIndex] ? petalColors(myPlants[revealIndex]) : null),
+    [revealIndex, myPlants]
+  );
+  // After the planting moment, a quiet note while the AI is still reading.
+  const readingPost = !planting && !reveal ? [...myPosts].reverse().find((post) => post.moodPending) : undefined;
+  const moodNoteShown = Boolean(revealPost || readingPost);
+
   const beamPlot =
     newestPostId && newestPostId !== seenNewest && !planting && !editing && !replay && myArranged ? myArranged.plots[myPosts.length - 1] : undefined;
   const burstColors = useMemo(
@@ -1467,7 +1509,7 @@ export default function WorldGardenScene({
     const timer = window.setTimeout(dismissHint, 8000);
     return () => window.clearTimeout(timer);
   });
-  const showHint = !hintSeen && mode === "garden" && Boolean(me) && myPosts.length > 0 && !planting && !editing && !isReading && !replay;
+  const showHint = !hintSeen && mode === "garden" && Boolean(me) && myPosts.length > 0 && !planting && !editing && !isReading && !replay && !moodNoteShown;
 
   // --- Postcard ---
   const [sharing, setSharing] = useState(false);
@@ -1703,6 +1745,9 @@ export default function WorldGardenScene({
               {planting && plantingPlot && burstColors && !still ? (
                 <BloomBurst key={`burst-${planting.key}`} position={plantingPlot} colors={burstColors} delay={PLANTING.growDelay + 0.75} />
               ) : null}
+              {reveal && revealPlot && revealColors && !still ? (
+                <BloomBurst key={`reveal-${reveal.key}`} position={revealPlot} colors={revealColors} delay={0.1} />
+              ) : null}
               {beamPlot ? <NewBeam key={newestPostId} position={beamPlot} /> : null}
               {/* Your decorations stay put when you zoom out to the world. */}
               {mode === "world" ? <IslandDecorations layout={myArranged} center={homeCenter} decorations={arrangement.decorations} night={night} /> : null}
@@ -1874,7 +1919,7 @@ export default function WorldGardenScene({
           )
         : null}
 
-      {caring && careTasks > 0 && !showHint && !isReading ? (
+      {caring && careTasks > 0 && !showHint && !isReading && !moodNoteShown ? (
         <p
           role="status"
           className={cn(
@@ -1915,8 +1960,30 @@ export default function WorldGardenScene({
           )}
         >
           <Sprout className="size-4 text-primary" aria-hidden="true" />
-          Planted today · {moodLabels[plantingPost.mood]}
+          Planted today · {plantingPost.moodPending ? "Reading your words…" : moodLabels[plantingPost.mood]}
         </div>
+      ) : null}
+
+      {revealPost ? (
+        <GardenMoodNote
+          key={reveal?.key}
+          label={moodLabels[revealPost.mood]}
+          reason={revealPost.moodReason}
+          onDismiss={() => setReveal(null)}
+        />
+      ) : null}
+
+      {readingPost && !isReading && !editing && !replay ? (
+        <p
+          role="status"
+          className={cn(
+            "pointer-events-none absolute top-[calc(max(0.5rem,env(safe-area-inset-top))+5.5rem)] left-1/2 z-[2000] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2 text-xs font-medium whitespace-nowrap text-foreground/80 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-300",
+            glassSurface,
+          )}
+        >
+          <Sparkles className="size-3.5 text-primary motion-safe:animate-pulse" aria-hidden="true" />
+          The garden is reading your words…
+        </p>
       ) : null}
 
       {replay && mode === "garden" && !editing ? (

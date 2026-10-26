@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@puma-brain/backend/convex/_generated/api";
-import { useAction, useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation, usePaginatedQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -101,7 +101,7 @@ export default function UserPost() {
     return () => observer.disconnect();
   }, [status, loadMore]);
   const deletePost = useMutation(api.posts.deletePost);
-  const updatePost = useAction(api.posts.updatePost);
+  const updatePost = useMutation(api.posts.updatePost);
   const [editingPost, setEditingPost] = useState<any>(null);
   const [editedBody, setEditedBody] = useState("");
   const [editedVisibility, setEditedVisibility] = useState<"public" | "private">("public");
