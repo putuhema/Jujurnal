@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ChevronRight, Eye, LockKeyhole, X } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@puma-brain/backend/convex/_generated/api";
 import type { Id } from "@puma-brain/backend/convex/_generated/dataModel";
@@ -149,12 +149,9 @@ export const JournalPanel = ({
         )}
       </div>
 
-      <footer className="flex items-center justify-between gap-2 border-t border-border/60 px-3 py-2 sm:px-4 sm:py-3">
-        <span className="pl-2 text-xs text-muted-foreground">
-          {formatDistanceToNow(new Date(post._creationTime), { addSuffix: true })}
-        </span>
-        <div className="flex items-center gap-1">
-          {onWater ? <WaterButton postId={post._id as Id<"posts">} onWater={onWater} /> : null}
+      <footer className="flex items-center justify-between gap-2 border-t border-border/60 px-2 py-1.5 sm:px-3 sm:py-2">
+        {onWater ? <WaterButton postId={post._id as Id<"posts">} onWater={onWater} /> : <span />}
+        <div className="flex items-center">
           <button
             type="button"
             onClick={onPrevious}
@@ -164,7 +161,7 @@ export const JournalPanel = ({
           >
             <ChevronLeft className="size-5 sm:size-4" aria-hidden="true" />
           </button>
-          <span className="min-w-12 text-center text-xs font-medium tabular-nums text-muted-foreground">
+          <span className="min-w-10 text-center text-xs font-medium whitespace-nowrap tabular-nums text-muted-foreground">
             {index + 1} / {total}
           </span>
           <button
@@ -188,7 +185,7 @@ const WaterButton = ({ postId, onWater }: { postId: Id<"posts">; onWater: () => 
   const reaction = useQuery(api.reactions.getForPost, { postId });
   if (!reaction || (!reaction.isOwner && !reaction.canReact && reaction.unavailableReason !== "signedOut")) return null;
   const done = reaction.isOwner ? reaction.selfWateredOn === format(new Date(), "yyyy-MM-dd") : reaction.viewerReacted;
-  const label = reaction.isOwner ? (done ? "Watered today" : "Water") : null;
+  const label = reaction.isOwner ? (done ? "Watered" : "Water") : null;
   return (
     <button
       type="button"
@@ -200,7 +197,7 @@ const WaterButton = ({ postId, onWater }: { postId: Id<"posts">; onWater: () => 
       aria-label={reaction.isOwner ? (done ? "Watered today" : "Water your plant") : done ? "Watered" : "Water this plant"}
       title={reaction.isOwner ? "Water it once a day to help it grow" : undefined}
       className={cn(
-        "flex h-11 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm font-medium text-sky-700 transition-transform duration-150 ease-out active:scale-[0.95] sm:h-8 dark:text-sky-300",
+        "flex h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-sm font-medium whitespace-nowrap text-sky-700 transition-transform duration-150 ease-out active:scale-[0.95] sm:h-8 dark:text-sky-300",
         done ? "bg-sky-100 dark:bg-sky-950" : "hover:bg-sky-50 dark:hover:bg-sky-950/60",
       )}
     >

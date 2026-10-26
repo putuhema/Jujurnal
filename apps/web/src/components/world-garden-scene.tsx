@@ -23,7 +23,6 @@ import { getAtmosphereLook, getDayPart, getSeason, getWeather, describeAtmospher
 import { makePostcard, sharePostcard } from "@/lib/garden-postcard";
 import { startAmbience, stopAmbience, updateAmbience } from "@/lib/garden-sounds";
 import { weedCount, type GiftKind } from "@puma-brain/backend/convex/gardenItems";
-import { format } from "date-fns";
 import { DropIcon } from "@phosphor-icons/react";
 import { PULL_SECONDS, Weed } from "./garden-care";
 import { Bee, Cat, Decoration, FreeCellMarkers, Frog, Gift } from "./garden-objects";
@@ -739,8 +738,6 @@ export default function WorldGardenScene({
   const [planting, setPlanting] = useState<{ postId: string; key: number } | null>(null);
   const [replay, setReplay] = useState<{ day: number; playing: boolean } | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
-  // Your plants watered this visit, before the server confirms it.
-  const [wateredHere, setWateredHere] = useState<Set<string>>(() => new Set());
   const [waterEffects, setWaterEffects] = useState<WaterEffect[]>([]);
   // The journal being read in the side panel.
   const [focusPostId, setFocusPostId] = useState<string | null>(null);
@@ -969,22 +966,8 @@ export default function WorldGardenScene({
     return { cat, frog, bee, gifts, decorations, center: scene.center, seed: scene.seed, free: open };
   }, [mode, visitArranged, visit, visitPosts, visitPlants, myArranged, me, myPosts, myPlants, arrangement, garden?.gifts, now]);
 
-  // --- Garden care: thirsty young plants, weeds, and plants moving up a stage ---
-  const today = format(clock, "yyyy-MM-dd");
+  // --- Garden care: weeds, and plants moving up a stage ---
   const caring = mode === "garden" && Boolean(garden) && !editing && !replay && !planting;
-  // Plants still growing want water once a day; blooming ones are happy.
-  const thirsty = useMemo(
-    () =>
-      caring && myArranged
-        ? myPosts.flatMap((post, index) => {
-            const plot = myArranged.plots[index];
-            if (!plot || getGrowthStage(post._creationTime, now, totalWaterings(post)) === "bloom") return [];
-            if (post.selfWateredOn === today || wateredHere.has(post._id)) return [];
-            return [{ post, index, plot }];
-          })
-        : [],
-    [caring, myArranged, myPosts, now, today, wateredHere]
-  );
   // Weeds creep onto free grass while you're away; pulled ones animate out first.
   const [pulledHere, setPulledHere] = useState<number[]>([]);
   const [pulling, setPulling] = useState<number[]>([]);
@@ -1013,7 +996,7 @@ export default function WorldGardenScene({
     }, PULL_SECONDS * 1000);
     void garden.onPullWeed(index).catch(() => toast.error("Couldn't pull that weed. Try again?"));
   };
-  const careTasks = thirsty.length + weeds.filter((weed) => !weed.pulling).length;
+  const careTasks = weeds.filter((weed) => !weed.pulling).length;
   // A thank-you when the last task of the day is done.
   const hadTasks = useRef(false);
   useEffect(() => {
@@ -1254,22 +1237,14 @@ export default function WorldGardenScene({
   // someone else's. The panel only asks when it hasn't been watered yet, so the
   // can starts pouring straight away while the server catches up.
   const [ownPulse, setOwnPulse] = useState({ postId: "", count: 0 });
-  // Your own plant: pour straight away, and count it as watered today while the server catches up.
+  // Your own plant: pour straight away while the server catches up.
   const waterOwnPlant = async (post: WorldPost, plot: { x: number; y: number; z: number }, model?: PlantModel) => {
     const height = (model?.height ?? 0.6) * getPlantGrowth(post._creationTime, now, totalWaterings(post) + 1);
     buzz([10, 40, 18]);
     playWater(plot, height);
-    setWateredHere((set) => new Set(set).add(post._id));
     window.setTimeout(() => setOwnPulse((pulse) => ({ postId: post._id, count: pulse.count + 1 })), WATERING_HIT * 1000);
     const result = garden ? await garden.onWaterOwn(post._id).catch(() => "failed" as const) : "unavailable";
-    if (result !== "watered" && result !== "already") {
-      toast.error("Couldn't water it. Try again?");
-      setWateredHere((set) => {
-        const next = new Set(set);
-        next.delete(post._id);
-        return next;
-      });
-    }
+    if (result !== "watered" && result !== "already") toast.error("Couldn't water it. Try again?");
   };
   const waterReading = async () => {
     if (!reading?.plot || !readable) return;
@@ -1880,25 +1855,6 @@ export default function WorldGardenScene({
       {showHitAreas && caring && !isReading
         ? (
             <>
-              {thirsty.map(({ post, index, plot }) => {
-                const height = (myPlants[index]?.height ?? 0.4) * getPlantGrowth(post._creationTime, now, totalWaterings(post));
-                const at = projectPoint(camera, plot.x, plot.y + height, plot.z);
-                return (
-                  <button
-                    key={`thirsty-${post._id}`}
-                    type="button"
-                    onClick={() => void waterOwnPlant(post, plot, myPlants[index])}
-                    aria-label="This plant is thirsty. Water it."
-                    title="Thirsty. Tap to water"
-                    className="group absolute z-[700] flex size-11 -translate-x-1/2 -translate-y-[120%] cursor-pointer items-center justify-center rounded-full outline-none"
-                    style={{ left: `${at.left}%`, top: `${at.top}%` }}
-                  >
-                    <span className="flex size-8 items-center justify-center rounded-full bg-sky-100/95 text-sky-600 shadow-md ring-1 ring-sky-300/60 transition-transform duration-150 ease-out group-focus-visible:ring-2 group-focus-visible:ring-ring group-active:scale-90 motion-safe:animate-[bob_2.4s_ease-in-out_infinite] dark:bg-sky-950/90 dark:text-sky-300">
-                      <DropIcon weight="fill" className="size-4" />
-                    </span>
-                  </button>
-                );
-              })}
               {weeds.map((weed) => {
                 if (weed.pulling) return null;
                 const at = projectPoint(camera, weed.spot.x, weed.spot.y + 0.08, weed.spot.z);
@@ -1927,11 +1883,6 @@ export default function WorldGardenScene({
           )}
         >
           <span className="font-semibold">Today's care</span>
-          {thirsty.length ? (
-            <span className="inline-flex items-center gap-1 text-sky-700 dark:text-sky-300">
-              <DropIcon weight="fill" className="size-3.5" /> {thirsty.length} thirsty
-            </span>
-          ) : null}
           {weeds.filter((weed) => !weed.pulling).length ? (
             <span className="inline-flex items-center gap-1 text-lime-800 dark:text-lime-300">
               <Sprout className="size-3.5" aria-hidden="true" /> {weeds.filter((weed) => !weed.pulling).length} {weeds.filter((weed) => !weed.pulling).length === 1 ? "weed" : "weeds"}
